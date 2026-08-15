@@ -1,5 +1,0 @@
-source_doi,source_title,biopolymer_type,material_composition,pore_size_um,porosity_pct,printing_method,layer_thickness_um,density_g_cm3,compressive_strength_MPa,elastic_modulus_MPa,degradation_rate_pct_per_week,cell_viability_pct,bone_regeneration_score,notes
-10.3390/polym15030559,Characterization of PLA/PCL/nHA Biocomposites via Cold Isostatic Pressing,PLA/PCL/HA,85 wt% PLA/PCL + 15 wt% nHA,,,cold isostatic pressing,,,82.72,,,,,highest compressive strength variant reported (PLA/PCL/15HA)
-patent_5626861,Polymeric-hydroxyapatite bone composite,PLGA/HA,50 wt% HA,100 (macro) / 20 (micro),,solvent casting,,,,293,,,,pre-degradation modulus; drops to ~10 MPa after 6 weeks - log as separate row if using time-series
-patent_5626861,Polymeric-hydroxyapatite bone composite (6wk degraded),PLGA/HA,50 wt% HA,100 (macro) / 20 (micro),,solvent casting,,,,10,,,,post 6-week degradation in PBS pH 7.4
-eureka_pla_te,PLA Tissue Engineering scaffold design review,PLA/HA,10-30 wt% HA,200-600,40-80,FDM,,,45-65,,,,,range reported - split into low/mid/high rows if source gives discrete data points

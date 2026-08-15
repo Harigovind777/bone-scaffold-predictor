@@ -1,0 +1,1741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bone Scaffold Lab</title>
+<style>
+/* ==========================================================================
+   Tokens — "specimen under section"
+   Series colours are assigned by what the thing IS, not by rank: the scaffold
+   is synthetic polymer (violet), new bone is mineral (ochre), the construct is
+   the two together (teal). Both sets pass the six categorical-palette checks
+   (lightness band, chroma floor, CVD separation, normal-vision floor, contrast)
+   against their own surface — the dark set is stepped for dark, not flipped.
+   ========================================================================== */
+:root{
+  --bg:#E8EBE9;        --bg-sunk:#DFE3E0;
+  --surface:#FAFBFA;   --surface-2:#F1F3F1;  --surface-3:#E4E9E5;
+  --line:#D2D7D3;      --line-strong:#B7BFB9;
+  --ink:#15181A;       --ink-2:#39413E;      --muted:#5C6663;  --faint:#8B9591;
+
+  --scaffold:#5B44CC;  --bone:#B5761A;       --construct:#00947C;
+  --accent:#5B44CC;    --accent-ink:#FFFFFF; --accent-wash:#ECE9FA;
+  --pass:#2A7D4F;      --pass-wash:#E3F1E9;
+  --fail:#B03A2B;      --fail-wash:#FBEAE7;
+  --warn:#8A6206;      --warn-wash:#F9F0D9;
+  --console-bg:#1A1922; --console-ink:#D8D6E4;
+
+  --shadow-1:0 1px 2px rgba(20,24,22,.05), 0 2px 8px rgba(20,24,22,.04);
+  --shadow-2:0 12px 40px rgba(20,24,22,.16), 0 2px 8px rgba(20,24,22,.08);
+
+  --display:"Avenir Next Condensed","Avenir Next","Arial Narrow",system-ui,sans-serif;
+  --sans:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --prose:Charter,"Iowan Old Style",Palatino,Georgia,serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --header-h:64px;
+  --slide:380ms cubic-bezier(.22,.61,.36,1);
+  --quick:180ms cubic-bezier(.22,.61,.36,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --bg:#131219;        --bg-sunk:#0E0D14;
+    --surface:#1C1B26;   --surface-2:#17161F;  --surface-3:#232231;
+    --line:#2C2A3A;      --line-strong:#3D3B52;
+    --ink:#E9E8F0;       --ink-2:#C3C0D2;      --muted:#9793A8;  --faint:#726E85;
+
+    --scaffold:#8C74EF;  --bone:#C57F1E;       --construct:#00A58A;
+    --accent:#8C74EF;    --accent-ink:#14121F; --accent-wash:#241F3D;
+    --pass:#48BC80;      --pass-wash:#132A1E;
+    --fail:#F07A6A;      --fail-wash:#331A16;
+    --warn:#D9A441;      --warn-wash:#2E2413;
+    --console-bg:#0C0B12; --console-ink:#CFCCDE;
+
+    --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
+    --shadow-2:0 16px 48px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme=dark]{
+  --bg:#131219;        --bg-sunk:#0E0D14;
+  --surface:#1C1B26;   --surface-2:#17161F;  --surface-3:#232231;
+  --line:#2C2A3A;      --line-strong:#3D3B52;
+  --ink:#E9E8F0;       --ink-2:#C3C0D2;      --muted:#9793A8;  --faint:#726E85;
+  --scaffold:#8C74EF;  --bone:#C57F1E;       --construct:#00A58A;
+  --accent:#8C74EF;    --accent-ink:#14121F; --accent-wash:#241F3D;
+  --pass:#48BC80;      --pass-wash:#132A1E;
+  --fail:#F07A6A;      --fail-wash:#331A16;
+  --warn:#D9A441;      --warn-wash:#2E2413;
+  --console-bg:#0C0B12; --console-ink:#CFCCDE;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
+  --shadow-2:0 16px 48px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4);
+}
+
+/* ---------------------------------------------------------------- base --- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);font-size:14.5px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3{margin:0;font-weight:600}
+button,input,select{font-family:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+code{font-family:var(--mono);font-size:.92em;background:var(--surface-3);
+     padding:1px 5px;border-radius:4px}
+
+.eyebrow{
+  font-family:var(--display);font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.14em;color:var(--faint);
+}
+.prose{font-family:var(--prose);font-size:14.5px;line-height:1.6;color:var(--ink-2)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1460px;margin:0 auto;padding:0 24px}
+
+/* -------------------------------------------------------------- header --- */
+header{
+  position:sticky;top:0;z-index:40;height:var(--header-h);
+  background:color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter:saturate(1.6) blur(14px);
+  -webkit-backdrop-filter:saturate(1.6) blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.bar{display:flex;align-items:center;gap:22px;height:var(--header-h)}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto;min-width:0}
+.brand canvas{
+  width:34px;height:34px;border-radius:8px;flex:none;
+  border:1px solid var(--line);background:var(--surface);
+}
+.brand h1{
+  font-family:var(--display);font-size:19px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;line-height:1.05;white-space:nowrap;
+}
+.brand .tag{
+  font-family:var(--prose);font-size:12px;font-style:italic;
+  color:var(--muted);line-height:1.2;white-space:nowrap;
+}
+nav{position:relative;display:flex;gap:2px;flex:none}
+nav button{
+  position:relative;background:none;border:0;cursor:pointer;padding:9px 16px;
+  font-family:var(--display);font-size:13.5px;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);
+  transition:color var(--quick);
+}
+nav button:hover{color:var(--ink)}
+nav button[aria-selected=true]{color:var(--ink)}
+.ink-bar{
+  position:absolute;left:0;bottom:-1px;height:2px;width:1px;
+  background:var(--accent);border-radius:2px;
+  transform-origin:left center;transition:transform var(--slide);
+}
+.theme-btn{
+  flex:none;background:var(--surface);border:1px solid var(--line);color:var(--muted);
+  width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;
+  display:grid;place-items:center;transition:color var(--quick),border-color var(--quick);
+}
+.theme-btn:hover{color:var(--ink);border-color:var(--line-strong)}
+
+/* ------------------------------------------------- sliding tab windows --- */
+/* overflow-x:clip rather than hidden — clip does not create a scroll container,
+   so `position:sticky` on the console rail still engages against the document. */
+.viewport{position:relative;overflow-x:clip;overflow-y:visible;
+          transition:height var(--slide);padding-top:24px}
+.panel{position:absolute;top:24px;left:0;width:100%;
+       transition:transform var(--slide),opacity var(--slide)}
+.panel[data-state=off]{opacity:.35}
+
+/* --------------------------------------------------------------- cards --- */
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-1);
+}
+.card-hd{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--line);
+}
+.card-hd .eyebrow{margin-right:auto}
+.card-bd{padding:18px}
+
+/* ------------------------------------------------------- predict layout --- */
+.split{display:grid;grid-template-columns:334px minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:1040px){.split{grid-template-columns:1fr}}
+
+.rail{position:sticky;top:calc(var(--header-h) + 24px)}
+
+/* ------------------------------------------------------ section window --- */
+/* The signature: a real cross-section through the specified unit cell, built
+   from the same level set the FEM meshes (sim/tpms_fem.py), with the section
+   plane sliding through the cell. */
+.window{
+  position:relative;border-radius:var(--r-lg) var(--r-lg) 0 0;overflow:hidden;
+  background:var(--surface-2);border-bottom:1px solid var(--line);
+}
+.window canvas{
+  display:block;width:100%;aspect-ratio:1/1;cursor:ew-resize;touch-action:none;
+}
+.window .badge{
+  position:absolute;top:12px;left:12px;display:flex;gap:6px;align-items:center;
+  font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);
+  background:color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  padding:4px 9px;border-radius:99px;border:1px solid var(--line);
+}
+.window .zread{
+  position:absolute;bottom:12px;right:12px;
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  background:color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  padding:3px 8px;border-radius:99px;border:1px solid var(--line);
+}
+.window .hint{
+  position:absolute;bottom:12px;left:12px;font-size:11px;color:var(--faint);
+  opacity:0;transition:opacity var(--quick);pointer-events:none;
+}
+.window:hover .hint{opacity:1}
+
+/* ---------------------------------------------------------------- form --- */
+.fieldset{padding:16px 18px;border-bottom:1px solid var(--line)}
+.fieldset:last-of-type{border-bottom:0}
+.fieldset > .eyebrow{display:block;margin-bottom:12px}
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field > label,.lab{
+  display:flex;align-items:baseline;gap:8px;
+  font-size:12px;color:var(--muted);margin-bottom:5px;
+}
+.lab .v{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+select{
+  width:100%;padding:8px 30px 8px 10px;font-size:13.5px;color:var(--ink);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);
+  appearance:none;cursor:pointer;transition:border-color var(--quick);
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),
+                   linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+}
+select:hover{border-color:var(--line-strong)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--line);
+     border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{
+  flex:1;background:none;border:0;cursor:pointer;padding:6px 4px;border-radius:4px;
+  font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);transition:all var(--quick);
+}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.seg.mini button{font-size:11px;padding:4px 8px;letter-spacing:.06em}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:20px;background:none;cursor:grab;
+}
+input[type=range]:active{cursor:grabbing}
+input[type=range]::-webkit-slider-runnable-track{
+  height:4px;border-radius:99px;background:var(--surface-3);border:1px solid var(--line);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;margin-top:-7px;
+  background:var(--accent);border:2px solid var(--surface);box-shadow:var(--shadow-1);
+  transition:transform var(--quick);
+}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.12)}
+input[type=range]::-moz-range-track{height:4px;border-radius:99px;background:var(--surface-3)}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;border:2px solid var(--surface);border-radius:50%;background:var(--accent)}
+
+.chk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--muted);
+     cursor:pointer;line-height:1.45}
+.chk input{margin:2px 0 0;accent-color:var(--accent);flex:none}
+.go{
+  width:100%;padding:12px;background:var(--accent);color:var(--accent-ink);border:0;
+  border-radius:var(--r-sm);cursor:pointer;
+  font-family:var(--display);font-size:14px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:filter var(--quick),transform var(--quick);
+}
+.go:hover:not(:disabled){filter:brightness(1.08)}
+.go:active:not(:disabled){transform:translateY(1px)}
+.go:disabled{opacity:.6;cursor:progress}
+.go.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+
+/* ------------------------------------------------------------- verdict --- */
+.verdict{
+  display:flex;align-items:center;gap:14px;padding:16px 20px;margin-bottom:18px;
+  border-radius:var(--r-lg);border:1px solid;box-shadow:var(--shadow-1);
+}
+.verdict.ok{background:var(--pass-wash);border-color:color-mix(in srgb,var(--pass) 32%,transparent);color:var(--pass)}
+.verdict.no{background:var(--fail-wash);border-color:color-mix(in srgb,var(--fail) 32%,transparent);color:var(--fail)}
+.verdict .mark{
+  width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;
+  background:currentColor;font-size:16px;font-weight:700;
+}
+.verdict.ok .mark::after{content:"✓";color:var(--pass-wash)}
+.verdict.no .mark::after{content:"✕";color:var(--fail-wash)}
+.verdict .txt{font-family:var(--display);font-size:19px;font-weight:600;
+              letter-spacing:.1em;text-transform:uppercase}
+.verdict .cost{margin-left:auto;text-align:right;color:var(--ink-2)}
+.verdict .cost b{display:block;font-family:var(--mono);font-size:15px;color:var(--ink)}
+.verdict .cost span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+                    font-family:var(--display);color:var(--muted)}
+
+/* --------------------------------------------------------------- tiles --- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));
+       gap:12px;margin-bottom:18px}
+.tile{
+  position:relative;text-align:left;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);padding:13px 14px 12px;
+  box-shadow:var(--shadow-1);cursor:pointer;
+  transition:border-color var(--quick),transform var(--quick),box-shadow var(--quick);
+}
+.tile:hover{border-color:var(--line-strong);transform:translateY(-1px);box-shadow:var(--shadow-2)}
+.tile .k{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;
+         text-transform:uppercase;color:var(--faint)}
+.tile .v{font-family:var(--mono);font-variant-numeric:tabular-nums;
+         font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:4px;line-height:1.1}
+.tile .u{font-size:12px;color:var(--muted);margin-top:2px}
+.tile .arrow{position:absolute;top:12px;right:12px;color:var(--faint);font-size:12px;
+             opacity:0;transition:opacity var(--quick)}
+.tile:hover .arrow{opacity:1}
+/* threshold bar — where the value sits inside its acceptable window */
+.gauge{position:relative;height:5px;margin-top:9px;border-radius:99px;
+       background:var(--surface-3);overflow:hidden}
+.gauge .band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--pass) 24%,transparent)}
+.gauge .pin{position:absolute;top:-2px;bottom:-2px;width:2.5px;border-radius:99px;background:var(--ink)}
+.gauge.no .band{background:color-mix(in srgb,var(--fail) 22%,transparent)}
+.gauge.no .pin{background:var(--fail)}
+.gauge.ok .pin{background:var(--pass)}
+
+/* --------------------------------------------------------------- chips --- */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;
+  font-size:12.5px;font-weight:500;border:1px solid;
+}
+.chip.ok{background:var(--pass-wash);border-color:color-mix(in srgb,var(--pass) 30%,transparent);color:var(--pass)}
+.chip.no{background:var(--fail-wash);border-color:color-mix(in srgb,var(--fail) 30%,transparent);color:var(--fail)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+
+.note{
+  display:flex;gap:12px;padding:14px 16px;border-radius:var(--r);margin-bottom:18px;
+  background:var(--warn-wash);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
+  font-family:var(--prose);font-size:13.5px;line-height:1.55;color:var(--ink-2);
+}
+.note .bang{font-family:var(--display);font-weight:700;color:var(--warn);flex:none}
+.note b{color:var(--ink)}
+
+/* -------------------------------------------------------------- charts --- */
+.chart-wrap{position:relative}
+.legend{display:flex;flex-wrap:wrap;gap:14px;padding:0 18px 12px}
+.legend span{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+.legend i{width:14px;height:2.5px;border-radius:2px;background:currentColor;flex:none}
+.legend .ref i{height:0;border-top:2px dashed currentColor;border-radius:0}
+.chart-tip{
+  position:absolute;pointer-events:none;opacity:0;z-index:5;
+  transform:translate(-50%,-100%);transition:opacity var(--quick);
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  box-shadow:var(--shadow-2);padding:8px 11px;min-width:132px;
+}
+.chart-tip.on{opacity:1}
+.chart-tip .wk{font-family:var(--display);font-size:10.5px;font-weight:600;
+               letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.chart-tip .r{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}
+.chart-tip .r i{width:9px;height:9px;border-radius:2px;background:currentColor;flex:none}
+.chart-tip .r b{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums;
+                color:var(--ink);font-weight:600}
+svg text{font-family:var(--sans)}
+.dtable{width:100%;border-collapse:collapse;font-size:13px}
+.dtable th,.dtable td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
+.dtable th{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.11em;
+           text-transform:uppercase;color:var(--faint)}
+.dtable td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.scroll-y{max-height:340px;overflow:auto}
+.tblwrap{overflow-x:auto}
+
+/* ---------------------------------------------------------- provenance --- */
+.prov dt{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;
+         text-transform:uppercase;color:var(--faint);margin-top:14px}
+.prov dt:first-child{margin-top:0}
+.prov dd{margin:3px 0 0;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+
+/* ------------------------------------------------------ sliding drawer --- */
+.scrim{
+  position:fixed;inset:0;z-index:60;background:rgba(10,12,11,.42);
+  opacity:0;pointer-events:none;transition:opacity var(--slide);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;z-index:61;width:min(430px,92vw);
+  background:var(--surface);border-left:1px solid var(--line);
+  box-shadow:var(--shadow-2);transform:translateX(100%);
+  transition:transform var(--slide);display:flex;flex-direction:column;
+}
+.drawer.on{transform:translateX(0)}
+.drawer-hd{display:flex;align-items:flex-start;gap:12px;padding:22px 22px 16px;
+           border-bottom:1px solid var(--line)}
+.drawer-hd .eyebrow{display:block;margin-bottom:6px}
+.drawer-hd h3{font-family:var(--display);font-size:21px;font-weight:600;letter-spacing:.03em}
+.x{
+  margin-left:auto;flex:none;width:30px;height:30px;border-radius:8px;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
+  display:grid;place-items:center;font-size:15px;line-height:1;transition:all var(--quick);
+}
+.x:hover{color:var(--ink);border-color:var(--line-strong)}
+.drawer-bd{padding:22px;overflow-y:auto;flex:1}
+.readout{display:flex;align-items:baseline;gap:9px;margin-bottom:6px}
+.readout .big{font-family:var(--mono);font-variant-numeric:tabular-nums;
+              font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.readout .un{font-size:14px;color:var(--muted)}
+.status{
+  display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;
+  font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;border:1px solid;margin-bottom:18px;
+}
+.status.ok{background:var(--pass-wash);border-color:color-mix(in srgb,var(--pass) 30%,transparent);color:var(--pass)}
+.status.no{background:var(--fail-wash);border-color:color-mix(in srgb,var(--fail) 30%,transparent);color:var(--fail)}
+.status.flat{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
+.drawer h4{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;
+           text-transform:uppercase;color:var(--faint);margin:20px 0 7px}
+.drawer h4:first-of-type{margin-top:0}
+.drawer .mono-line{font-family:var(--mono);font-size:12.5px;line-height:1.65;color:var(--ink-2)}
+
+/* -------------------------------------------------- results dashboard --- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:12px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+      padding:15px 16px;box-shadow:var(--shadow-1)}
+.stat .k{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;
+         text-transform:uppercase;color:var(--faint)}
+.stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:27px;
+         font-weight:600;letter-spacing:-.025em;margin-top:5px;line-height:1.05}
+.stat .n{font-size:12px;color:var(--muted);margin-top:3px}
+.stat.lead{background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
+.stat.lead .v{color:var(--accent)}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px;margin-bottom:18px}
+.ladder tr.win td{font-weight:700;color:var(--accent)}
+.ladder tr.win td:first-child::before{content:"▸ ";color:var(--accent)}
+
+.bars{display:flex;flex-direction:column;gap:14px}
+.barrow .lab2{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:5px}
+.barrow .lab2 b{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--ink)}
+.barrow .track{height:12px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.barrow .fill{height:100%;border-radius:99px;background:var(--accent);
+              transform-origin:left;transform:scaleX(0);transition:transform 700ms cubic-bezier(.22,.61,.36,1)}
+.barrow.ghosted .fill{background:var(--line-strong)}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.gallery figure{margin:0;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);padding:10px;cursor:zoom-in;box-shadow:var(--shadow-1);
+  transition:transform var(--quick),box-shadow var(--quick),border-color var(--quick)}
+.gallery figure:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:var(--line-strong)}
+.gallery img{width:100%;display:block;border-radius:var(--r-sm);background:#fff}
+.gallery figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:8px}
+
+/* ------------------------------------------------ sliding figure viewer --- */
+.lightbox{
+  position:fixed;inset:0;z-index:70;display:none;
+  background:color-mix(in srgb, var(--bg-sunk) 92%, transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
+.lightbox.on{display:grid;grid-template-rows:auto 1fr auto}
+.lb-hd{display:flex;align-items:center;gap:14px;padding:18px 24px}
+.lb-hd .eyebrow{margin-right:auto}
+.lb-stage{position:relative;overflow:hidden;display:grid;place-items:center;padding:0 24px}
+.lb-slide{
+  max-width:100%;max-height:100%;transition:transform var(--slide),opacity var(--slide);
+}
+.lb-slide img{max-width:min(1100px,88vw);max-height:70vh;display:block;
+              border-radius:var(--r);background:#fff;box-shadow:var(--shadow-2)}
+.lb-ft{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px 24px}
+.lb-ft .nav-btn{
+  width:38px;height:38px;border-radius:50%;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);color:var(--ink);
+  display:grid;place-items:center;font-size:15px;transition:all var(--quick);
+}
+.lb-ft .nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.lb-dots{display:flex;gap:7px;margin:0 10px}
+.lb-dots button{width:7px;height:7px;padding:0;border-radius:50%;border:0;cursor:pointer;
+                background:var(--line-strong);transition:all var(--quick)}
+.lb-dots button[aria-current=true]{background:var(--accent);transform:scale(1.4)}
+.lb-cap{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:190px;text-align:center}
+
+/* ------------------------------------------------------------ pipeline --- */
+.stages{display:grid;gap:2px}
+.stg{
+  display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r-sm);
+  transition:background var(--quick);
+}
+.stg .idx{
+  width:23px;height:23px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  background:var(--surface-3);color:var(--faint);border:1px solid var(--line);
+}
+.stg .nm{font-size:13.5px;color:var(--muted)}
+.stg[data-s=run]{background:var(--accent-wash)}
+.stg[data-s=run] .idx{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.stg[data-s=run] .nm{color:var(--ink);font-weight:600}
+.stg[data-s=done] .idx{background:var(--pass-wash);color:var(--pass);border-color:color-mix(in srgb,var(--pass) 36%,transparent)}
+.stg[data-s=done] .idx::after{content:"✓"}
+.stg[data-s=done] .idx span{display:none}
+.stg[data-s=done] .nm{color:var(--ink-2)}
+.runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.runbar .go{width:auto;min-width:190px}
+.clock{font-family:var(--mono);font-size:13px;color:var(--muted);
+       font-variant-numeric:tabular-nums;margin-left:auto}
+pre.console{
+  background:var(--console-bg);color:var(--console-ink);
+  font-family:var(--mono);font-size:12px;line-height:1.6;
+  padding:16px 18px;border-radius:var(--r-lg);border:1px solid var(--line);
+  max-height:560px;overflow:auto;margin:0;white-space:pre-wrap;word-break:break-word;
+}
+pre.console .h{color:#9C86F5;font-weight:700;display:block;margin:12px 0 4px}
+pre.console .g{color:#5FCBA0}
+pre.console .w{color:#E2B159}
+pre.console .d{color:#6C6883}
+
+/* ------------------------------------------------------------- utility --- */
+.empty{
+  padding:52px 32px;text-align:center;font-family:var(--prose);
+  font-size:15px;color:var(--muted);line-height:1.6;
+}
+.empty b{color:var(--ink);font-family:var(--sans);font-weight:600}
+.err{color:var(--fail);font-size:13px;margin-top:10px}
+.spin{
+  width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;
+  border-radius:50%;animation:sp .7s linear infinite;flex:none;
+}
+@keyframes sp{to{transform:rotate(360deg)}}
+.stack > * + *{margin-top:18px}
+.foot{padding:34px 0 60px;font-family:var(--prose);font-size:12.5px;color:var(--faint)}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{
+    animation-duration:.01ms !important;animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <div class="brand">
+      <canvas id="mark" width="68" height="68" aria-hidden="true"></canvas>
+      <div>
+        <h1>Bone Scaffold Lab</h1>
+        <div class="tag">resorbable scaffolds — predicted, then checked</div>
+      </div>
+    </div>
+    <nav id="nav" role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="true"  data-tab="predict">Predict</button>
+      <button role="tab" aria-selected="false" data-tab="results">Results</button>
+      <button role="tab" aria-selected="false" data-tab="pipeline">Pipeline</button>
+      <div class="ink-bar" id="inkbar"></div>
+    </nav>
+    <button class="theme-btn" id="theme" title="Switch theme" aria-label="Switch theme">◐</button>
+  </div>
+</header>
+
+<div class="wrap">
+<div class="viewport" id="viewport">
+
+  <!-- ============================ PREDICT ============================ -->
+  <section class="panel" id="p-predict" role="tabpanel" aria-label="Predict">
+    <div class="split">
+
+      <div class="rail">
+        <form class="card" id="form">
+          <div class="window">
+            <canvas id="lattice" aria-label="Cross-section through the specified unit cell"
+                    tabindex="0" role="img"></canvas>
+            <div class="badge"><span id="badge-txt">gyroid · network</span></div>
+            <div class="zread" id="zread">z 0.500</div>
+            <div class="hint">drag to move the section</div>
+          </div>
+
+          <div class="fieldset">
+            <span class="eyebrow">Architecture</span>
+            <div class="field">
+              <div class="seg" id="fam">
+                <button type="button" data-f="TPMS" aria-pressed="true">TPMS</button>
+                <button type="button" data-f="FDM"  aria-pressed="false">FDM print</button>
+              </div>
+            </div>
+            <div id="tpms-fields">
+              <div class="field">
+                <label for="topology">Topology</label>
+                <select id="topology">
+                  <option>gyroid</option><option>diamond</option>
+                  <option>schwarzP</option><option>iwp</option>
+                </select>
+              </div>
+              <div class="duo">
+                <div class="field"><label for="tmode">Solid</label>
+                  <select id="tmode"><option>network</option><option>sheet</option></select></div>
+                <div class="field"><label for="cells">Unit cells</label>
+                  <select id="cells"><option>1</option><option>2</option></select></div>
+              </div>
+            </div>
+            <div id="fdm-fields" hidden>
+              <div class="field">
+                <label for="fmode">Lay-down</label>
+                <select id="fmode"><option>aligned</option><option>staggered</option></select>
+              </div>
+              <div class="duo">
+                <div class="field"><label for="struts">Filaments</label>
+                  <select id="struts"><option>2</option><option selected>3</option>
+                    <option>4</option><option>5</option></select></div>
+                <div class="field"><label for="layers">Layers</label>
+                  <select id="layers"><option>8</option><option>10</option>
+                    <option selected>12</option><option>14</option><option>16</option></select></div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="lab"><label for="porosity">Porosity</label><span class="v" id="pv">0.680</span></div>
+              <input type="range" id="porosity" min="0.30" max="0.92" step="0.0025" value="0.68">
+            </div>
+          </div>
+
+          <div class="fieldset">
+            <span class="eyebrow">Chemistry</span>
+            <div class="field"><label for="polymer">Polymer</label><select id="polymer"></select></div>
+            <div class="field"><label for="ceramic">Ceramic</label><select id="ceramic"></select></div>
+            <div class="field" id="wt-wrap" hidden>
+              <div class="lab"><label for="wt">Ceramic content</label><span class="v" id="wv">30%</span></div>
+              <input type="range" id="wt" min="0" max="0.6" step="0.05" value="0.30">
+            </div>
+          </div>
+
+          <div class="fieldset">
+            <span class="eyebrow">Clinical target</span>
+            <div class="field"><label for="site">Implant site</label><select id="site"></select></div>
+            <div class="field">
+              <label class="chk" for="solve">
+                <input type="checkbox" id="solve">
+                <span>Solve this exact geometry with the voxel FEM (~5&nbsp;s). Needed for
+                      geometries the sweep never sampled.</span>
+              </label>
+            </div>
+            <button class="go" id="go" type="submit">Predict</button>
+            <div id="formerr" class="err" role="alert"></div>
+          </div>
+        </form>
+      </div>
+
+      <div id="out">
+        <div class="card empty">
+          The section on the left is a real slice through the cell you have specified — the
+          same level set the solver meshes. Set a specification and press <b>Predict</b> to
+          get its properties, its 52-week trajectory and a feasibility verdict, from the
+          same code path as <code>tools/predict.py</code>.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ RESULTS ============================ -->
+  <section class="panel" id="p-results" role="tabpanel" aria-label="Results" inert>
+    <div id="res-body"><div class="card empty">Loading the last pipeline run…</div></div>
+  </section>
+
+  <!-- =========================== PIPELINE ============================ -->
+  <section class="panel" id="p-pipeline" role="tabpanel" aria-label="Pipeline" inert>
+    <div class="split">
+      <div class="rail">
+        <div class="card">
+          <div class="card-hd"><span class="eyebrow">Stages</span></div>
+          <div class="card-bd">
+            <div class="stages" id="stages"></div>
+          </div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <div class="card-hd"><span class="eyebrow">Re-run the framework</span></div>
+          <div class="card-bd">
+            <p class="prose" style="margin:0 0 16px">
+              Runs <code>run_pipeline.py</code> end to end — dataset audit, model ladder,
+              leakage audit, mesh convergence and co-kriging, constrained inverse search,
+              then every figure and table back into <code>results/</code>. About half a
+              minute. The Results tab reloads itself when it finishes.
+            </p>
+            <div class="runbar">
+              <button class="go" id="runbtn">Run pipeline</button>
+              <span class="clock num" id="clock">—</span>
+            </div>
+          </div>
+        </div>
+        <pre class="console" id="log"><span class="d">Idle. Press Run pipeline to start.</span></pre>
+      </div>
+    </div>
+  </section>
+
+</div>
+<div class="foot">Bound to 127.0.0.1 · standard library only · figures served from a whitelist</div>
+</div>
+
+<!-- sliding inspector -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title" tabindex="-1">
+  <div class="drawer-hd">
+    <div>
+      <span class="eyebrow" id="dr-eyebrow"></span>
+      <h3 id="dr-title"></h3>
+    </div>
+    <button class="x" id="dr-close" aria-label="Close">✕</button>
+  </div>
+  <div class="drawer-bd" id="dr-body"></div>
+</aside>
+
+<!-- sliding figure viewer -->
+<div class="lightbox" id="lb" role="dialog" aria-modal="true" aria-label="Figure viewer">
+  <div class="lb-hd">
+    <span class="eyebrow">Figure</span>
+    <button class="x" id="lb-close" aria-label="Close">✕</button>
+  </div>
+  <div class="lb-stage"><div class="lb-slide" id="lb-slide"><img id="lb-img" alt=""></div></div>
+  <div class="lb-ft">
+    <button class="nav-btn" id="lb-prev" aria-label="Previous figure">‹</button>
+    <span class="lb-cap" id="lb-cap"></span>
+    <button class="nav-btn" id="lb-next" aria-label="Next figure">›</button>
+    <div class="lb-dots" id="lb-dots"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c;
+  if (x !== undefined) n.textContent = x; return n; };
+const fmt = (v, d = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : (+v).toFixed(d);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const CSSVAR = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let META = null, FAMILY = "TPMS", LAST = null;
+
+/* ==========================================================================
+   Theme
+   ========================================================================== */
+const savedTheme = localStorage.getItem("bsl-theme");
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$("#theme").onclick = () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("bsl-theme", next);
+  drawLattice(true); drawMark(); redrawCharts();
+};
+
+/* ==========================================================================
+   Sliding tab windows
+   Panels are absolutely stacked and translated; the viewport animates to the
+   active panel's height so the page never carries three panels' worth of space.
+   ========================================================================== */
+const PANELS = ["predict", "results", "pipeline"];
+const viewport = $("#viewport");
+let active = 0;
+
+function paintInkBar() {
+  const btn = $$("#nav button")[active], bar = $("#inkbar");
+  bar.style.transform = `translateX(${btn.offsetLeft}px) scaleX(${btn.offsetWidth})`;
+}
+function syncHeight() {
+  const p = $("#p-" + PANELS[active]);
+  viewport.style.height = (p.offsetHeight + 24) + "px";
+}
+function goTab(i) {
+  active = i;
+  PANELS.forEach((name, k) => {
+    const p = $("#p-" + name);
+    p.style.transform = `translate3d(${(k - i) * 102}%,0,0)`;
+    p.dataset.state = k === i ? "on" : "off";
+    p.toggleAttribute("inert", k !== i);
+  });
+  $$("#nav button").forEach((b, k) => b.setAttribute("aria-selected", String(k === i)));
+  paintInkBar(); syncHeight();
+  if (PANELS[i] === "results") loadResults();
+  latticeRunning = PANELS[i] === "predict";
+  if (latticeRunning) tickLattice();
+}
+$$("#nav button").forEach((b, i) => b.onclick = () => goTab(i));
+PANELS.forEach(name => new ResizeObserver(() => syncHeight()).observe($("#p-" + name)));
+addEventListener("resize", () => { paintInkBar(); syncHeight(); });
+
+/* ==========================================================================
+   The section window — signature element
+   A direct port of sim/tpms_fem.py: the same four level sets, the same
+   `field <= c` (network) / `|field| <= c` (sheet) solid test, and the same
+   bisection on c to hit the requested porosity. What you see is a slice
+   through the cell the solver would mesh, not an illustration of one.
+   ========================================================================== */
+const NG = 34;                       // bisection grid — coarse enough to be instant
+let field3 = null, fieldKey = "", threshold = 0, zPlane = 0.5;
+let latticeRunning = true, dragging = false, drifting = !REDUCED, rafId = null;
+
+function tpmsField(kind, n, cells) {
+  const f = new Float32Array(n * n * n), S = 2 * Math.PI * cells;
+  let i = 0;
+  for (let a = 0; a < n; a++) { const x = (a + 0.5) / n * S, sx = Math.sin(x), cx = Math.cos(x);
+    for (let b = 0; b < n; b++) { const y = (b + 0.5) / n * S, sy = Math.sin(y), cy = Math.cos(y);
+      for (let c = 0; c < n; c++) { const z = (c + 0.5) / n * S, sz = Math.sin(z), cz = Math.cos(z);
+        f[i++] = kind === "gyroid"   ? sx * cy + sy * cz + sz * cx
+              : kind === "diamond"  ? sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz
+              : kind === "schwarzP" ? cx + cy + cz
+              : 2 * (cx * cy + cy * cz + cz * cx) - (Math.cos(2 * x) + Math.cos(2 * y) + Math.cos(2 * z));
+      } } }
+  return f;
+}
+/* Same bisection as build_at_porosity: raising c always adds solid. */
+function solveThreshold(f, mode, targetPorosity) {
+  let lo, hi;
+  if (mode === "sheet") { lo = 0; hi = 0; for (const v of f) hi = Math.max(hi, Math.abs(v)); }
+  else { lo = Infinity; hi = -Infinity; for (const v of f) { if (v < lo) lo = v; if (v > hi) hi = v; } }
+  for (let it = 0; it < 40; it++) {
+    const mid = 0.5 * (lo + hi);
+    let solid = 0;
+    if (mode === "sheet") { for (const v of f) if (Math.abs(v) <= mid) solid++; }
+    else { for (const v of f) if (v <= mid) solid++; }
+    const por = 1 - solid / f.length;
+    if (Math.abs(por - targetPorosity) < 1e-3) return mid;
+    if (por > targetPorosity) lo = mid; else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+/* FDM: filament diameter is fixed and porosity is set by in-plane spacing, exactly
+   as build_fdm_at_porosity does. Solved here in closed form — a cylinder of radius r
+   clipped to a layer of height h = 0.8·d covers
+   2[(h/2)√(r²−h²/4) + r² asin(h/2r)] of every s·h period — so the slider stays
+   instant instead of re-voxelising forty times per drag. */
+const FDM_D = 0.25, LAYER_RATIO = 0.8;
+function fdmSpacing(targetPorosity) {
+  const r = FDM_D / 2, h = LAYER_RATIO * FDM_D, u = clamp(h / 2, 0, r);
+  const area = 2 * (u * Math.sqrt(Math.max(0, r * r - u * u)) + r * r * Math.asin(u / r));
+  let lo = FDM_D, hi = 8 * FDM_D;
+  for (let it = 0; it < 40; it++) {
+    const s = 0.5 * (lo + hi);
+    const por = 1 - area / (s * h);
+    if (Math.abs(por - targetPorosity) < 1e-4) { lo = hi = s; break; }
+    if (por > targetPorosity) hi = s; else lo = s;
+  }
+  const s = 0.5 * (lo + hi);
+  const nStruts = Math.max(1, Math.round(1 / s));
+  return { s: 1 / nStruts, nStruts, r, h, nLayers: Math.max(1, Math.round(1 / h)) };
+}
+
+function specNow() {
+  return {
+    fam: FAMILY,
+    topology: $("#topology").value, tmode: $("#tmode").value,
+    cells: +$("#cells").value, fmode: $("#fmode").value,
+    porosity: +$("#porosity").value
+  };
+}
+function ensureField(sp) {
+  const key = `${sp.topology}|${sp.tmode}|${sp.cells}`;
+  if (key !== fieldKey) { field3 = tpmsField(sp.topology, NG, sp.cells); fieldKey = key; }
+}
+
+const cv = $("#lattice"), ctx = cv.getContext("2d", { willReadFrequently: true });
+const RES = 190;                      // field is evaluated at RES², then scaled up
+const off = document.createElement("canvas");
+off.width = off.height = RES;
+const octx = off.getContext("2d");
+let img = octx.createImageData(RES, RES);
+
+function hexOf(varName) {
+  const c = CSSVAR(varName);
+  const d = document.createElement("canvas").getContext("2d");
+  d.fillStyle = c; d.fillRect(0, 0, 1, 1);
+  return d.getImageData(0, 0, 1, 1).data;
+}
+let COL_SOLID = null, COL_VOID = null, colKey = "";
+function refreshColors() {
+  const key = document.documentElement.dataset.theme + matchMedia("(prefers-color-scheme:dark)").matches;
+  if (key === colKey && COL_SOLID) return;
+  colKey = key; COL_SOLID = hexOf("--accent"); COL_VOID = hexOf("--surface-2");
+}
+
+function drawLattice(force) {
+  const sp = specNow();
+  refreshColors();
+  const px = img.data;
+  const [sr, sg, sb] = COL_SOLID, [vr, vg, vb] = COL_VOID;
+
+  if (sp.fam === "TPMS") {
+    ensureField(sp);
+    if (force !== "z") threshold = solveThreshold(field3, sp.tmode, sp.porosity);
+    const S = 2 * Math.PI * sp.cells, zc = zPlane * S, sz = Math.sin(zc), cz = Math.cos(zc);
+    const soft = 0.13 * (sp.topology === "iwp" ? 4 : sp.topology === "schwarzP" ? 2 : 1);
+    let i = 0;
+    for (let b = 0; b < RES; b++) {
+      const y = (b + 0.5) / RES * S, sy = Math.sin(y), cy = Math.cos(y);
+      for (let a = 0; a < RES; a++) {
+        const x = (a + 0.5) / RES * S, sx = Math.sin(x), cx = Math.cos(x);
+        const f = sp.topology === "gyroid"   ? sx * cy + sy * cz + sz * cx
+                : sp.topology === "diamond"  ? sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz
+                : sp.topology === "schwarzP" ? cx + cy + cz
+                : 2 * (cx * cy + cy * cz + cz * cx) - (Math.cos(2 * x) + Math.cos(2 * y) + Math.cos(2 * z));
+        // antialias by fading across the level set rather than hard-thresholding
+        const t = sp.tmode === "sheet"
+          ? clamp((threshold - Math.abs(f)) / soft + 0.5, 0, 1)
+          : clamp((threshold - f) / soft + 0.5, 0, 1);
+        px[i] = vr + (sr - vr) * t; px[i + 1] = vg + (sg - vg) * t;
+        px[i + 2] = vb + (sb - vb) * t; px[i + 3] = 255;
+        i += 4;
+      }
+    }
+  } else {
+    const g = fdmSpacing(sp.porosity), stagger = sp.fmode === "staggered";
+    const h = 1 / g.nLayers, k = clamp(Math.floor(zPlane / h), 0, g.nLayers - 1);
+    const alongX = k % 2 === 0;                       // even layers run along x
+    const offs = (stagger && Math.floor(k / 2) % 2 === 1) ? 0.5 * g.s : 0;
+    const dz = zPlane - (k + 0.5) * h;
+    const soft = 0.012;
+    let i = 0;
+    for (let b = 0; b < RES; b++) {
+      const yy = (b + 0.5) / RES;
+      for (let a = 0; a < RES; a++) {
+        const xx = (a + 0.5) / RES;
+        const t0 = alongX ? yy : xx;                  // struts run perpendicular to this
+        let d = Infinity;
+        for (let m = 0; m < g.nStruts; m++) {
+          let dd = Math.abs(t0 - ((m + 0.5) * g.s + offs));
+          dd = Math.min(dd, 1 - dd);
+          if (dd < d) d = dd;
+        }
+        const dist = Math.sqrt(d * d + dz * dz);
+        const t = clamp((g.r - dist) / soft + 0.5, 0, 1);
+        px[i] = vr + (sr - vr) * t; px[i + 1] = vg + (sg - vg) * t;
+        px[i + 2] = vb + (sb - vb) * t; px[i + 3] = 255;
+        i += 4;
+      }
+    }
+  }
+  octx.putImageData(img, 0, 0);
+
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = cv.clientWidth || 300;
+  if (cv.width !== Math.round(w * dpr)) { cv.width = cv.height = Math.round(w * dpr); }
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(off, 0, 0, cv.width, cv.height);
+
+  $("#badge-txt").textContent = sp.fam === "TPMS"
+    ? `${sp.topology} · ${sp.tmode}` : `fdm · ${sp.fmode}`;
+  $("#zread").textContent = "z " + zPlane.toFixed(3);
+}
+
+/* The section plane drifts slowly through the cell — one sweep every 30 s —
+   and drops to a static mid-slice under reduced-motion. Dragging scrubs it. */
+let lastT = 0;
+function tickLattice(ts) {
+  rafId = null;
+  if (!latticeRunning || document.hidden) return;
+  if (drifting && !dragging) {
+    if (ts && lastT) { zPlane = (zPlane + (ts - lastT) / 30000) % 1; }
+    lastT = ts || 0;
+    if (ts && ts - (tickLattice.paint || 0) > 45) { tickLattice.paint = ts; drawLattice("z"); }
+  }
+  rafId = requestAnimationFrame(tickLattice);
+}
+document.addEventListener("visibilitychange", () => { lastT = 0; if (!document.hidden) tickLattice(); });
+
+function scrubFrom(ev) {
+  const r = cv.getBoundingClientRect();
+  zPlane = clamp((ev.clientX - r.left) / r.width, 0, 1);
+  drawLattice("z");
+}
+cv.addEventListener("pointerdown", ev => {
+  dragging = true; drifting = false; cv.setPointerCapture(ev.pointerId); scrubFrom(ev);
+});
+cv.addEventListener("pointermove", ev => { if (dragging) scrubFrom(ev); });
+cv.addEventListener("pointerup", () => { dragging = false; });
+cv.addEventListener("pointercancel", () => { dragging = false; });
+cv.addEventListener("keydown", ev => {
+  const step = ev.shiftKey ? 0.05 : 0.01;
+  if (ev.key === "ArrowRight") { drifting = false; zPlane = clamp(zPlane + step, 0, 1); drawLattice("z"); ev.preventDefault(); }
+  if (ev.key === "ArrowLeft")  { drifting = false; zPlane = clamp(zPlane - step, 0, 1); drawLattice("z"); ev.preventDefault(); }
+  if (ev.key === " ") { drifting = !drifting && !REDUCED; lastT = 0; tickLattice(); ev.preventDefault(); }
+});
+
+/* the wordmark is the same gyroid, sectioned at mid-cell */
+function drawMark() {
+  const c = $("#mark"), g = c.getContext("2d"), n = 68;
+  refreshColors();
+  const f = tpmsField("gyroid", 24, 1), th = solveThreshold(f, "network", 0.62);
+  const d = g.createImageData(n, n), p = d.data;
+  const [sr, sg, sb] = COL_SOLID, [vr, vg, vb] = hexOf("--surface");
+  let i = 0;
+  for (let b = 0; b < n; b++) {
+    const y = (b + .5) / n * 2 * Math.PI, sy = Math.sin(y), cy = Math.cos(y);
+    for (let a = 0; a < n; a++) {
+      const x = (a + .5) / n * 2 * Math.PI, sx = Math.sin(x), cx = Math.cos(x);
+      const v = sx * cy + sy * 1 + 0 * cx;                 // z = π/2 slice
+      const t = clamp((th - v) / 0.18 + 0.5, 0, 1);
+      p[i] = vr + (sr - vr) * t; p[i + 1] = vg + (sg - vg) * t;
+      p[i + 2] = vb + (sb - vb) * t; p[i + 3] = 255; i += 4;
+    }
+  }
+  g.putImageData(d, 0, 0);
+}
+
+/* ==========================================================================
+   Charts — hand-rolled SVG, because a demo that needs a CDN is a demo that
+   fails in a room with bad wifi. Legend + direct labels so identity is never
+   colour alone; crosshair tooltip; a table view for every chart.
+   ========================================================================== */
+const CHARTS = new Map();
+function redrawCharts() { CHARTS.forEach(fn => fn()); }
+let rzT = null;
+addEventListener("resize", () => { clearTimeout(rzT); rzT = setTimeout(redrawCharts, 140); });
+
+function chart(box, spec) {
+  const W = Math.max(box.clientWidth || 640, 320), H = spec.height || 260;
+  const m = { t: 14, r: 112, b: 36, l: 56 };
+  const S = spec.series;
+  const xs = S[0].pts.map(p => p[0]);
+  const allY = S.flatMap(s => s.pts.map(p => p[1])).concat(spec.hline ? [spec.hline.y] : []);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = spec.yMin !== undefined ? spec.yMin : Math.min(...allY);
+  let y1 = Math.max(...allY);
+  if (y1 - y0 < 1e-9) y1 = y0 + 1;
+  y1 += (y1 - y0) * 0.10;
+  const px = v => m.l + (v - x0) / (x1 - x0 || 1) * (W - m.l - m.r);
+  const py = v => H - m.b - (v - y0) / (y1 - y0) * (H - m.t - m.b);
+  const fmtY = t => Math.abs(t) >= 100 ? t.toFixed(0) : t.toFixed(1);
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
+            aria-label="${esc(spec.aria || spec.yLabel)}" style="display:block;overflow:visible">`;
+  for (let i = 0; i <= 4; i++) {
+    const t = y0 + (y1 - y0) * i / 4, Y = py(t).toFixed(1);
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y}" y2="${Y}" stroke="var(--line)" stroke-width="1"/>`;
+    g += `<text x="${m.l - 9}" y="${(+Y + 4).toFixed(1)}" font-size="11" fill="var(--faint)"
+           text-anchor="end" style="font-variant-numeric:tabular-nums">${fmtY(t)}</text>`;
+  }
+  for (let i = 0; i <= 4; i++) {
+    const v = x0 + (x1 - x0) * i / 4;
+    g += `<text x="${px(v).toFixed(1)}" y="${H - m.b + 18}" font-size="11" fill="var(--faint)"
+           text-anchor="middle" style="font-variant-numeric:tabular-nums">${v.toFixed(0)}</text>`;
+  }
+  if (spec.hline) {
+    const Y = py(spec.hline.y).toFixed(1);
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y}" y2="${Y}" stroke="var(--muted)"
+           stroke-width="1.5" stroke-dasharray="5 4" opacity=".75"/>`;
+    g += `<text x="${W - m.r + 8}" y="${(+Y + 4).toFixed(1)}" font-size="11.5"
+           fill="var(--muted)">${esc(spec.hline.label)}</text>`;
+  }
+  if (spec.marker) {
+    const X = px(spec.marker.x).toFixed(1);
+    g += `<line x1="${X}" x2="${X}" y1="${m.t}" y2="${H - m.b}" stroke="var(--ink)"
+           stroke-width="1" stroke-dasharray="2 3" opacity=".45"/>`;
+    g += `<text x="${X}" y="${m.t + 1}" font-size="10.5" fill="var(--muted)"
+           text-anchor="${spec.marker.x > (x0 + x1) / 2 ? "end" : "start"}"
+           dx="${spec.marker.x > (x0 + x1) / 2 ? -6 : 6}">${esc(spec.marker.label)}</text>`;
+  }
+  for (const s of S) {
+    const d = s.pts.map((p, i) => `${i ? "L" : "M"}${px(p[0]).toFixed(1)},${py(p[1]).toFixed(1)}`).join("");
+    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"
+           stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  /* These curves converge by design, so stacked end labels would overprint exactly
+     where the result is. Push them apart, same fix as the report figures. */
+  const ends = S.map(s => ({ y: py(s.pts.at(-1)[1]), s })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++)
+    if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+  for (const e of ends)
+    g += `<text x="${W - m.r + 8}" y="${(e.y + 4).toFixed(1)}" font-size="11.5"
+           font-weight="600" fill="${e.s.color}">${esc(e.s.name)}</text>`;
+  g += `<g id="cx" style="display:none"><line stroke="var(--ink)" stroke-width="1" opacity=".3"
+         y1="${m.t}" y2="${H - m.b}"/>`;
+  S.forEach((s, i) => g += `<circle r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2"/>`);
+  g += `</g>`;
+  g += `<text x="${m.l}" y="${H - 3}" font-size="11" fill="var(--faint)">${esc(spec.xLabel)}</text>`;
+  g += `<text transform="translate(14,${m.t + 70}) rotate(-90)" font-size="11"
+         fill="var(--faint)">${esc(spec.yLabel)}</text>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}"
+         fill="transparent" id="hit"/></svg>`;
+  box.innerHTML = g;
+
+  const svg = box.querySelector("svg"), cx = box.querySelector("#cx");
+  const dots = [...cx.querySelectorAll("circle")];
+  let tip = box.querySelector(".chart-tip");
+  if (!tip) { tip = el("div", "chart-tip"); box.appendChild(tip); }
+
+  const onMove = ev => {
+    const r = svg.getBoundingClientRect();
+    const vx = (ev.clientX - r.left) * W / r.width;
+    if (vx < m.l - 4 || vx > W - m.r + 4) return onLeave();
+    const frac = (vx - m.l) / (W - m.l - m.r);
+    const idx = clamp(Math.round(frac * (xs.length - 1)), 0, xs.length - 1);
+    const X = px(xs[idx]);
+    cx.style.display = "";
+    cx.querySelector("line").setAttribute("x1", X);
+    cx.querySelector("line").setAttribute("x2", X);
+    dots.forEach((c, i) => { c.setAttribute("cx", X); c.setAttribute("cy", py(S[i].pts[idx][1])); });
+    tip.innerHTML = `<div class="wk">${esc(spec.xUnit || "week")} ${xs[idx]}</div>` +
+      S.map(s => `<div class="r" style="color:${s.color}"><i></i>` +
+        `<span style="color:var(--ink-2)">${esc(s.name)}</span>` +
+        `<b>${fmt(s.pts[idx][1], 1)}${spec.unit ? " " + esc(spec.unit) : ""}</b></div>`).join("");
+    tip.classList.add("on");
+    tip.style.left = clamp(X * r.width / W, 80, r.width - 80) + "px";
+    tip.style.top  = (py(Math.max(...S.map(s => s.pts[idx][1]))) * r.width / W - 14) + "px";
+  };
+  const onLeave = () => { cx.style.display = "none"; tip.classList.remove("on"); };
+  svg.addEventListener("pointermove", onMove);
+  svg.addEventListener("pointerleave", onLeave);
+}
+
+function chartCard(title, spec) {
+  const card = el("div", "card");
+  const hd = el("div", "card-hd");
+  hd.append(el("span", "eyebrow", title));
+  const seg = el("div", "seg mini");
+  const bC = el("button", null, "Chart"), bT = el("button", null, "Table");
+  bC.type = bT.type = "button";
+  bC.setAttribute("aria-pressed", "true"); bT.setAttribute("aria-pressed", "false");
+  seg.append(bC, bT); hd.append(seg);
+
+  const legend = el("div", "legend");
+  spec.series.forEach(s => {
+    const w = el("span"); w.style.color = s.color;
+    w.append(el("i"), el("span", null, s.name)); legend.append(w);
+  });
+  if (spec.hline) {
+    const w = el("span", "ref"); w.style.color = CSSVAR("--muted");
+    w.append(el("i"), el("span", null, spec.hline.label)); legend.append(w);
+  }
+
+  const bd = el("div", "card-bd"); bd.style.paddingTop = "6px";
+  const plot = el("div", "chart-wrap");
+  const tbl = el("div", "tblwrap scroll-y"); tbl.hidden = true;
+  bd.append(plot, tbl);
+  card.append(hd, legend, bd);
+
+  const draw = () => chart(plot, spec);
+  const key = title + Math.random();
+  CHARTS.set(key, draw);
+  queueMicrotask(draw);
+
+  const t = el("table", "dtable");
+  t.innerHTML = `<thead><tr><th>${esc(spec.xUnit || "week")}</th>` +
+    spec.series.map(s => `<th style="text-align:right">${esc(s.name)}</th>`).join("") +
+    "</tr></thead>";
+  const tb = el("tbody");
+  spec.series[0].pts.forEach((p, i) => {
+    const tr = el("tr");
+    tr.innerHTML = `<td class="n">${p[0]}</td>` +
+      spec.series.map(s => `<td class="n">${fmt(s.pts[i][1], 1)}</td>`).join("");
+    tb.append(tr);
+  });
+  t.append(tb); tbl.append(t);
+
+  const show = wantTable => {
+    plot.hidden = wantTable; legend.hidden = wantTable; tbl.hidden = !wantTable;
+    bC.setAttribute("aria-pressed", String(!wantTable));
+    bT.setAttribute("aria-pressed", String(wantTable));
+    if (!wantTable) draw();
+    syncHeight();
+  };
+  bC.onclick = () => show(false);
+  bT.onclick = () => show(true);
+  return card;
+}
+
+/* ==========================================================================
+   Form
+   ========================================================================== */
+$("#porosity").oninput = e => {
+  $("#pv").textContent = (+e.target.value).toFixed(3);
+  drawLattice();
+};
+$("#wt").oninput = e => $("#wv").textContent = Math.round(e.target.value * 100) + "%";
+["#topology", "#tmode", "#cells", "#fmode"].forEach(s =>
+  $(s).addEventListener("change", () => drawLattice()));
+$("#fam").querySelectorAll("button").forEach(b => b.onclick = () => {
+  FAMILY = b.dataset.f;
+  $("#fam").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  $("#tpms-fields").hidden = FAMILY !== "TPMS";
+  $("#fdm-fields").hidden  = FAMILY === "TPMS";
+  drawLattice(); syncHeight();
+});
+
+async function boot() {
+  drawMark();
+  META = await (await fetch("/api/meta")).json();
+  const fill = (sel, items, def) => {
+    $(sel).innerHTML = "";
+    items.forEach(v => { const o = el("option", null, v); if (v === def) o.selected = true;
+      $(sel).appendChild(o); });
+  };
+  fill("#polymer", META.polymers, "PLGA_85_15");
+  fill("#ceramic", META.ceramics, "beta_TCP");
+  $("#site").innerHTML = "";
+  Object.entries(META.sites).forEach(([k, v]) => {
+    const o = el("option", null, `${k.replace(/_/g, " ")} — native ${v.E_native} MPa`);
+    o.value = k; if (k === "trabecular_mid") o.selected = true;
+    $("#site").appendChild(o);
+  });
+  const syncWt = () => { $("#wt-wrap").hidden = $("#ceramic").value === "none"; syncHeight(); };
+  $("#ceramic").onchange = syncWt; syncWt();
+
+  buildStages();
+  goTab(0);
+  drawLattice(); tickLattice();
+  applyQuery();
+}
+
+/* Specs are shareable: the URL carries the whole specification, so a result shown in a
+   viva can be bookmarked, pasted into a report, or reopened months later and re-run
+   against whatever the pipeline says then. */
+const FIELDS = ["topology", "mode", "n_cells", "n_struts", "n_layers", "porosity",
+                "polymer", "ceramic", "ceramic_wt", "site", "solve"];
+
+function applyQuery() {
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return;
+  const fam = (q.get("topology") || "") === "fdm" ? "FDM" : "TPMS";
+  $("#fam").querySelectorAll("button").forEach(b => { if (b.dataset.f === fam) b.click(); });
+  const set = (sel, v) => { if (v !== null && $(sel)) $(sel).value = v; };
+  if (fam === "TPMS") { set("#topology", q.get("topology")); set("#tmode", q.get("mode")); }
+  else { set("#fmode", q.get("mode")); }
+  set("#cells", q.get("n_cells")); set("#struts", q.get("n_struts"));
+  set("#layers", q.get("n_layers")); set("#porosity", q.get("porosity"));
+  set("#polymer", q.get("polymer")); set("#ceramic", q.get("ceramic"));
+  set("#wt", q.get("ceramic_wt")); set("#site", q.get("site"));
+  $("#solve").checked = q.get("solve") === "1";
+  $("#wt-wrap").hidden = $("#ceramic").value === "none";
+  $("#pv").textContent = (+$("#porosity").value).toFixed(3);
+  $("#wv").textContent = Math.round($("#wt").value * 100) + "%";
+  drawLattice();
+  const f = $("#form");                    // requestSubmit is Safari 16+; fall back
+  if (f.requestSubmit) f.requestSubmit();
+  else f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+}
+
+function pushQuery(body) {
+  const q = new URLSearchParams();
+  FIELDS.forEach(k => {
+    let v = body[k];
+    if (k === "solve") v = v ? "1" : null;
+    if (v !== null && v !== undefined && v !== "") q.set(k, v);
+  });
+  history.replaceState(null, "", "?" + q.toString());
+}
+
+$("#form").onsubmit = async e => {
+  e.preventDefault();
+  const btn = $("#go"), err = $("#formerr");
+  err.textContent = "";
+  btn.disabled = true;
+  btn.innerHTML = $("#solve").checked
+    ? '<span class="spin"></span> meshing and solving' : '<span class="spin"></span> predicting';
+  const body = {
+    topology: FAMILY === "TPMS" ? $("#topology").value : "fdm",
+    mode: FAMILY === "TPMS" ? $("#tmode").value : $("#fmode").value,
+    n_cells: +$("#cells").value, n_struts: +$("#struts").value, n_layers: +$("#layers").value,
+    porosity: +$("#porosity").value, polymer: $("#polymer").value,
+    ceramic: $("#ceramic").value,
+    ceramic_wt: $("#ceramic").value === "none" ? 0 : +$("#wt").value,
+    site: $("#site").value, solve: $("#solve").checked
+  };
+  try {
+    const r = await fetch("/api/predict", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) err.textContent = j.error || "prediction failed";
+    else { render(j); pushQuery(body); }
+  } catch (ex) { err.textContent = String(ex); }
+  btn.disabled = false; btn.textContent = "Predict";
+};
+
+/* ==========================================================================
+   Render one prediction
+   ========================================================================== */
+/* Plain-language explanation of what each number is for. These are the rules the
+   verdict actually applies, written out — not marketing for the number. */
+const WHY = {
+  E0:    "Compressive modulus at implantation, before anything degrades. Too stiff and the " +
+         "bone alongside it unloads and thins; too compliant and it cannot carry the site.",
+  s0:    "Compressive strength at implantation. The threshold is the peak physiological " +
+         "stress the implant site sees.",
+  e12:   "Stiffness twelve weeks in, as a share of day zero. Bone needs load to remodel, so " +
+         "the scaffold is meant to soften — this is the handover rate, not a loss.",
+  pore:  "Mean pore diameter. Below the window osteoblasts bridge across the pore instead of " +
+         "growing through it; above it they lose the surface area to attach to.",
+  strut: "Thinnest load-bearing member. Below the minimum the printer cannot lay it down " +
+         "reliably, so the geometry is rejected before it is scored.",
+  pH:    "Lowest local pH over 52 weeks. Ester hydrolysis releases acid, and below 6.5 that " +
+         "kills osteoblasts faster than they colonise the scaffold."
+};
+
+function gauge(value, lo, hi, okLo, okHi, ok) {
+  const g = el("div", "gauge " + (ok === null ? "" : ok ? "ok" : "no"));
+  const band = el("div", "band");
+  band.style.left  = clamp((okLo - lo) / (hi - lo), 0, 1) * 100 + "%";
+  band.style.width = clamp((Math.min(okHi, hi) - Math.max(okLo, lo)) / (hi - lo), 0, 1) * 100 + "%";
+  const pin = el("div", "pin");
+  pin.style.left = clamp((value - lo) / (hi - lo), 0, 1) * 100 + "%";
+  g.append(band, pin);
+  return g;
+}
+
+function render(p) {
+  LAST = p;
+  const out = $("#out"); out.innerHTML = "";
+  const box = el("div", "stack");
+  const m = p.mechanics, d = p.degradation, v = p.verdict, geo = p.geometry, pr = p.provenance;
+
+  const vd = el("div", "verdict " + (v.feasible ? "ok" : "no"));
+  vd.append(el("div", "mark"), el("div", "txt", v.feasible ? "Feasible" : "Not feasible"));
+  const cost = el("div", "cost");
+  cost.append(el("b", null, v.load_transfer_cost.toFixed(4)), el("span", null, "load-transfer cost"));
+  vd.append(cost);
+  out.append(vd);
+
+  if (pr.extrapolating) {
+    const w = el("div", "note");
+    w.append(el("span", "bang", "!"));
+    const t = el("div");
+    t.innerHTML = "<b>Extrapolating.</b> This architecture was never simulated at that " +
+      "porosity, so the power law is being pushed past its data. Tick " +
+      "<b>Solve this exact geometry</b> for an answer backed by a mesh.";
+    w.append(t); out.append(w);
+  }
+
+  const nat = m.native_E_MPa, req = m.required_sigma_MPa;
+  const pw = META.windows.pore_um, minStrut = META.windows.min_strut_um;
+  const stiffOK = m.E0_MPa >= 0.5 * nat && m.E0_MPa <= 2 * nat;
+  const tiles = [
+    { id: "E0", k: "E₀", v: fmt(m.E0_MPa, 1), u: `MPa · native ${nat}`, why: WHY.E0,
+      title: "Initial modulus", unit: "MPa", ok: stiffOK,
+      rule: `Within 0.5×–2× native — ${fmt(0.5 * nat, 0)} to ${fmt(2 * nat, 0)} MPa`,
+      g: [0, 2.6 * nat, 0.5 * nat, 2 * nat] },
+    { id: "s0", k: "σ₀", v: fmt(m.sigma0_MPa, 1), u: `MPa · need ${fmt(req, 1)}`, why: WHY.s0,
+      title: "Initial strength", unit: "MPa", ok: m.sigma0_MPa >= req,
+      rule: `At least ${fmt(req, 1)} MPa, the peak physiological stress at this site`,
+      g: [0, Math.max(2 * req, m.sigma0_MPa * 1.2), req, Math.max(2 * req, m.sigma0_MPa * 1.2)] },
+    { id: "e12", k: "E at 12 wk", v: fmt(m.E_12wk_pct_of_E0, 1) + "%", u: "of E₀", why: WHY.e12,
+      title: "Stiffness at 12 weeks", unit: "% of E₀", ok: null, rule: "No hard threshold — read alongside the trajectory", g: null },
+    { id: "pore", k: "Pore size", v: fmt(geo.pore_size_um, 0), u: `µm · ${pw[0]}–${pw[1]}`, why: WHY.pore,
+      title: "Mean pore size", unit: "µm", ok: geo.pore_size_um >= pw[0] && geo.pore_size_um <= pw[1],
+      rule: `Inside the ingrowth window, ${pw[0]}–${pw[1]} µm`, g: [0, pw[1] * 1.5, pw[0], pw[1]] },
+    { id: "strut", k: "Strut", v: fmt(geo.strut_thickness_um, 0), u: `µm · min ${minStrut}`, why: WHY.strut,
+      title: "Strut thickness", unit: "µm", ok: geo.strut_thickness_um >= minStrut,
+      rule: `At least ${minStrut} µm, the printable minimum`,
+      g: [0, Math.max(minStrut * 3, geo.strut_thickness_um * 1.2), minStrut, Math.max(minStrut * 3, geo.strut_thickness_um * 1.2)] },
+    { id: "pH", k: "Min pH", v: fmt(d.min_pH, 2), u: "safe ≥ 6.5", why: WHY.pH,
+      title: "Minimum local pH", unit: "", ok: d.min_pH >= 6.5,
+      rule: "Never below 6.5 over 52 weeks", g: [6.0, 7.5, 6.5, 7.5] }
+  ];
+  const tg = el("div", "tiles");
+  tiles.forEach(t => {
+    const b = el("button", "tile"); b.type = "button";
+    b.append(el("div", "k", t.k), el("div", "v", t.v), el("div", "u", t.u),
+             el("div", "arrow", "→"));
+    if (t.g) b.append(gauge(+String(t.v).replace("%", ""), t.g[0], t.g[1], t.g[2], t.g[3], t.ok));
+    b.onclick = () => openDrawer(t, p);
+    tg.append(b);
+  });
+  out.append(tg);
+
+  const chips = el("div", "chips");
+  for (const [k, ok] of Object.entries(v.checks)) {
+    const c = el("div", "chip " + (ok ? "ok" : "no"));
+    c.append(el("span", "dot"), el("span", null, k));
+    chips.append(c);
+  }
+  out.append(chips);
+
+  if (v.geometry_rejections.length) {
+    const r = el("div", "note"); r.append(el("span", "bang", "!"));
+    const t = el("div");
+    t.innerHTML = "<b>Geometry rejected:</b> " + esc(v.geometry_rejections.join("; ")) + ".";
+    r.append(t); out.append(r);
+  }
+
+  const t = p.trajectory;
+  if (t) {
+    const zip = a => t.weeks.map((w, i) => [w, a[i]]);
+    /* Where new bone overtakes the scaffold is the whole clinical story, so it is
+       annotated rather than left to be eyeballed off two crossing lines. */
+    let cross = null;
+    for (let i = 1; i < t.weeks.length; i++)
+      if (t.E_bone[i] >= t.E_scaffold[i] && t.E_bone[i - 1] < t.E_scaffold[i - 1]) {
+        cross = { x: t.weeks[i], label: `bone overtakes at week ${t.weeks[i]}` }; break;
+      }
+    box.append(chartCard("Load transfer over healing", {
+      yMin: 0, xLabel: "weeks post-implantation", yLabel: "compressive modulus, MPa",
+      unit: "MPa", marker: cross, hline: { y: t.E_native, label: "native bone" },
+      aria: "Scaffold, new bone and construct modulus over 52 weeks",
+      series: [
+        { name: "scaffold",  color: CSSVAR("--scaffold"),  pts: zip(t.E_scaffold) },
+        { name: "new bone",  color: CSSVAR("--bone"),      pts: zip(t.E_bone) },
+        { name: "construct", color: CSSVAR("--construct"), pts: zip(t.E_total) }]
+    }));
+    box.append(chartCard("Why stiffness falls", {
+      yMin: 0, xLabel: "weeks post-implantation", yLabel: "per cent", unit: "%",
+      aria: "Remaining polymer mass and porosity over 52 weeks",
+      series: [
+        { name: "mass remaining", color: CSSVAR("--scaffold"), pts: zip(t.mass.map(x => x * 100)) },
+        { name: "porosity",       color: CSSVAR("--bone"),     pts: zip(t.porosity.map(x => x * 100)) }]
+    }));
+  }
+
+  const pv = el("div", "card");
+  const hd = el("div", "card-hd"); hd.append(el("span", "eyebrow", "Provenance"));
+  const bd = el("div", "card-bd");
+  const dl = el("dl", "prov");
+  const add = (k, val) => { dl.append(el("dt", null, k), el("dd", null, val)); };
+  add("Modulus", pr.modulus_from);
+  add("Geometry", pr.source);
+  add("Architecture", pr.config);
+  if (pr.P_window) add("Fitted window", `porosity ${pr.P_window[0]}–${pr.P_window[1]}, fit R² ${pr.ga_fit_r2}`);
+  if (pr.exponent_from) add("Exponent", pr.exponent_from);
+  add("Gibson–Ashby", pr.ga_C_anchored !== undefined
+    ? `n = ${pr.ga_n}, C fitted ${pr.ga_C_fitted} → anchored ${pr.ga_C_anchored} on the solved modulus`
+    : `n = ${pr.ga_n}, C = ${pr.ga_C_fitted}`);
+  add("Resorption", d.polymer_resorbed_week
+    ? `polymer below 10% at week ${d.polymer_resorbed_week}`
+    : "not resorbed within 52 weeks");
+  bd.append(dl); pv.append(hd, bd); box.append(pv);
+
+  out.append(box);
+  syncHeight();
+}
+
+/* ==========================================================================
+   Sliding inspector drawer
+   ========================================================================== */
+let lastFocus = null;
+function openDrawer(t, p) {
+  lastFocus = document.activeElement;
+  $("#dr-eyebrow").textContent = t.ok === null ? "Reading" : t.ok ? "Constraint met" : "Constraint failed";
+  $("#dr-title").textContent = t.title;
+  const body = $("#dr-body");
+  body.innerHTML = "";
+
+  const ro = el("div", "readout");
+  ro.append(el("span", "big", t.v));
+  if (t.unit) ro.append(el("span", "un", t.unit));
+  body.append(ro);
+
+  const st = el("div", "status " + (t.ok === null ? "flat" : t.ok ? "ok" : "no"),
+    t.ok === null ? "not a gate" : t.ok ? "pass" : "fail");
+  body.append(st);
+
+  const why = el("p", "prose", t.why); why.style.margin = "0 0 4px";
+  body.append(why);
+
+  body.append(el("h4", null, "Tested against"));
+  body.append(el("div", "mono-line", t.rule));
+
+  body.append(el("h4", null, "Where the number comes from"));
+  const pr = p.provenance;
+  const src = el("div", "mono-line");
+  src.innerHTML = (t.id === "E0" || t.id === "e12"
+      ? `${esc(pr.modulus_from)}<br>${esc(pr.config)}<br>` +
+        `Gibson–Ashby n = ${esc(pr.ga_n)}, C = ${esc(pr.ga_C_anchored ?? pr.ga_C_fitted)}`
+    : t.id === "pore" || t.id === "strut"
+      ? `${esc(pr.source)}<br>${esc(pr.config)}`
+    : t.id === "pH"
+      ? `hydrolysis kinetics in sim/physics.py, zero learned parameters<br>` +
+        `${esc(p.specification.polymer)}${p.specification.ceramic !== "none"
+          ? ` with ${esc(p.specification.ceramic)} at ${Math.round(p.specification.ceramic_wt * 100)}%` : ""}`
+    : `${esc(pr.modulus_from)}<br>${esc(pr.config)}`);
+  body.append(src);
+
+  body.append(el("h4", null, "Specification"));
+  const sp = p.specification;
+  body.append(el("div", "mono-line",
+    `${sp.topology} · ${sp.mode} · porosity ${sp.porosity}\n${sp.polymer}` +
+    (sp.ceramic !== "none" ? ` + ${sp.ceramic} ${Math.round(sp.ceramic_wt * 100)}%` : " · no ceramic") +
+    `\nsite ${sp.site.replace(/_/g, " ")}`)).lastChild.style.whiteSpace = "pre-line";
+
+  $("#drawer").classList.add("on");
+  $("#scrim").classList.add("on");
+  $("#drawer").focus();
+}
+function closeDrawer() {
+  $("#drawer").classList.remove("on");
+  $("#scrim").classList.remove("on");
+  if (lastFocus) lastFocus.focus();
+}
+$("#dr-close").onclick = closeDrawer;
+$("#scrim").onclick = closeDrawer;
+
+/* ==========================================================================
+   Results dashboard
+   ========================================================================== */
+let resLoaded = false;
+async function loadResults(force) {
+  if (resLoaded && !force) return;
+  const box = $("#res-body");
+  const j = await (await fetch("/api/results")).json();
+  if (!j.available) {
+    box.innerHTML = "";
+    const e = el("div", "card empty");
+    e.innerHTML = "Nothing to show yet. Open <b>Pipeline</b> and press <b>Run pipeline</b> — " +
+      "this page fills itself in when it finishes.";
+    box.append(e); syncHeight(); return;
+  }
+  resLoaded = true;
+  box.innerHTML = "";
+  const wrap = el("div", "stack");
+
+  const ds = j.dataset || {}, lk = j.leakage || {}, fu = j.fusion || {}, inv = j.inverse || {};
+  const sim = lk.simulated || {};
+  const gain = (j.best && j.gibson_ashby)
+    ? (j.best.r2 - j.gibson_ashby.r2 >= 0 ? "+" : "") + fmt(j.best.r2 - j.gibson_ashby.r2, 3) : "—";
+
+  const stats = el("div", "stats");
+  const stat = (k, v, n, lead) => {
+    const s = el("div", "stat" + (lead ? " lead" : ""));
+    s.append(el("div", "k", k), el("div", "v", v), el("div", "n", n || ""));
+    return s;
+  };
+  stats.append(
+    stat("Geometries", ds.n_simulated ?? "—", `${ds.n_architectures ?? "—"} architectures`),
+    stat("Best model", fmt(j.best?.r2, 3), (j.best?.model || "").replace(/_/g, " "), true),
+    stat("Textbook G–A", fmt(j.gibson_ashby?.r2, 3), "leave-one-architecture-out"),
+    stat("ML gain", gain, "over the power law"),
+    stat("Leakage", sim.inflation !== undefined ? "+" + fmt(sim.inflation, 3) : "—", "random vs grouped R²"),
+    stat("Printable", inv.printable ?? "—", `of ${inv.catalogue ?? "—"} in the catalogue`));
+  wrap.append(stats);
+
+  const two = el("div", "grid2");
+
+  /* ladder */
+  const lc = el("div", "card");
+  const lh = el("div", "card-hd");
+  lh.append(el("span", "eyebrow", "Model ladder — leave-one-architecture-out"));
+  const lb = el("div", "card-bd"); lb.style.paddingTop = "4px";
+  const tw = el("div", "tblwrap");
+  const tb = el("table", "dtable ladder");
+  tb.innerHTML = "<thead><tr><th>model</th><th style='text-align:right'>R²</th>" +
+    "<th style='text-align:right'>Spearman ρ</th>" +
+    "<th style='text-align:right'>fold-error</th></tr></thead>";
+  const body = el("tbody");
+  const top = Math.max(...j.ladder.map(r => r.r2));
+  j.ladder.forEach(r => {
+    const tr = el("tr"); if (r.r2 === top) tr.className = "win";
+    tr.innerHTML = `<td>${esc(r.model.replace(/_/g, " "))}</td>` +
+      `<td class="n">${fmt(r.r2, 3)}</td><td class="n">${fmt(r.spearman, 3)}</td>` +
+      `<td class="n">×${fmt(r.median_fold_error, 2)}</td>`;
+    body.append(tr);
+  });
+  tb.append(body); tw.append(tb); lb.append(tw);
+  const nt = el("p", "prose", "Every model is trained with one whole topology removed, then " +
+    "asked to predict it — the only protocol that reflects how a design tool is actually used.");
+  nt.style.cssText = "font-size:13px;margin:14px 0 0";
+  lb.append(nt);
+  lc.append(lh, lb); two.append(lc);
+
+  /* leakage — two readings of the same measure, so one colour and labels carry it */
+  if (sim.random_r2 !== undefined) {
+    const kc = el("div", "card");
+    const kh = el("div", "card-hd");
+    kh.append(el("span", "eyebrow", "What a random split would have claimed"));
+    const kb = el("div", "card-bd");
+    const bars = el("div", "bars");
+    const bar = (label, val, ghost) => {
+      const row = el("div", "barrow" + (ghost ? " ghosted" : ""));
+      const l = el("div", "lab2");
+      l.append(el("span", null, label), el("b", null, fmt(val, 3)));
+      const track = el("div", "track"), fill = el("div", "fill");
+      track.append(fill); row.append(l, track);
+      requestAnimationFrame(() => fill.style.transform = `scaleX(${clamp(val, 0, 1)})`);
+      return row;
+    };
+    bars.append(
+      bar(`random split, ${sim.n_groups} architectures pooled`, sim.random_r2, true),
+      bar("grouped by architecture (reported)", sim.grouped_r2, false));
+    kb.append(bars);
+    const kn = el("p", "prose",
+      `Rows from one architecture share a load path, so a random split puts near-duplicates ` +
+      `on both sides of the fold and inflates R² by ${fmt(sim.inflation, 3)}. The lower bar is ` +
+      `the number this project reports.`);
+    kn.style.cssText = "font-size:13px;margin:16px 0 0";
+    kb.append(kn);
+    kc.append(kh, kb); two.append(kc);
+  }
+  wrap.append(two);
+
+  /* figures */
+  const figs = j.figures || [];
+  if (figs.length) {
+    const fc = el("div", "card");
+    const fh = el("div", "card-hd");
+    fh.append(el("span", "eyebrow", "Figures"));
+    const cnt = el("span", "num"); cnt.style.cssText = "font-size:12px;color:var(--muted)";
+    cnt.textContent = figs.length + " from the last run";
+    fh.append(cnt);
+    const fb = el("div", "card-bd");
+    const gal = el("div", "gallery");
+    figs.forEach((name, i) => {
+      const f = el("figure");
+      const im = el("img");
+      im.src = "/api/figure?name=" + encodeURIComponent(name);
+      im.alt = name; im.loading = "lazy";
+      f.append(im, el("figcaption", null, name));
+      f.onclick = () => openLightbox(figs, i);
+      gal.append(f);
+    });
+    fb.append(gal); fc.append(fh, fb); wrap.append(fc);
+  }
+
+  box.append(wrap);
+  syncHeight();
+}
+
+/* ==========================================================================
+   Sliding figure viewer
+   ========================================================================== */
+let LBFIGS = [], lbIdx = 0;
+function openLightbox(figs, i) {
+  LBFIGS = figs; lbIdx = i;
+  const dots = $("#lb-dots"); dots.innerHTML = "";
+  figs.forEach((_, k) => {
+    const b = el("button"); b.type = "button";
+    b.setAttribute("aria-label", "Figure " + (k + 1));
+    b.onclick = () => showFig(k, k > lbIdx ? 1 : -1);
+    dots.append(b);
+  });
+  $("#lb").classList.add("on");
+  showFig(i, 0);
+  $("#lb-close").focus();
+}
+function showFig(i, dir) {
+  if (i < 0) i = LBFIGS.length - 1;
+  if (i >= LBFIGS.length) i = 0;
+  lbIdx = i;
+  const slide = $("#lb-slide");
+  const paint = () => {
+    $("#lb-img").src = "/api/figure?name=" + encodeURIComponent(LBFIGS[i]);
+    $("#lb-img").alt = LBFIGS[i];
+    $("#lb-cap").textContent = `${LBFIGS[i]}  ·  ${i + 1} / ${LBFIGS.length}`;
+    [...$("#lb-dots").children].forEach((b, k) => b.setAttribute("aria-current", String(k === i)));
+    slide.style.transition = "none";
+    slide.style.transform = `translateX(${dir * 26}px)`;
+    slide.style.opacity = "0";
+    requestAnimationFrame(() => {
+      slide.style.transition = "";
+      slide.style.transform = "translateX(0)";
+      slide.style.opacity = "1";
+    });
+  };
+  if (!dir || REDUCED) paint();
+  else {
+    slide.style.transform = `translateX(${-dir * 26}px)`;
+    slide.style.opacity = "0";
+    setTimeout(paint, REDUCED ? 0 : 130);
+  }
+}
+$("#lb-prev").onclick = () => showFig(lbIdx - 1, -1);
+$("#lb-next").onclick = () => showFig(lbIdx + 1, 1);
+$("#lb-close").onclick = () => $("#lb").classList.remove("on");
+$("#lb").addEventListener("click", ev => { if (ev.target.id === "lb") $("#lb").classList.remove("on"); });
+
+addEventListener("keydown", ev => {
+  if (ev.key === "Escape") {
+    if ($("#lb").classList.contains("on")) $("#lb").classList.remove("on");
+    else if ($("#drawer").classList.contains("on")) closeDrawer();
+  }
+  if (!$("#lb").classList.contains("on")) return;
+  if (ev.key === "ArrowLeft")  showFig(lbIdx - 1, -1);
+  if (ev.key === "ArrowRight") showFig(lbIdx + 1, 1);
+});
+
+/* ==========================================================================
+   Pipeline — six real stages, so the numbering is a sequence and not decoration
+   ========================================================================== */
+const STAGES = ["Dataset audit", "Model ladder", "Leakage audit",
+                "Convergence and fusion", "Inverse design", "Figures and tables"];
+function buildStages() {
+  const s = $("#stages"); s.innerHTML = "";
+  STAGES.forEach((name, i) => {
+    const r = el("div", "stg"); r.dataset.s = "idle"; r.id = "stg" + (i + 1);
+    const idx = el("div", "idx"); idx.append(el("span", null, String(i + 1)));
+    r.append(idx, el("div", "nm", name));
+    s.append(r);
+  });
+}
+function setStage(n) {
+  STAGES.forEach((_, i) => {
+    const r = $("#stg" + (i + 1));
+    r.dataset.s = i + 1 < n ? "done" : i + 1 === n ? "run" : "idle";
+  });
+}
+function finishStages() { STAGES.forEach((_, i) => $("#stg" + (i + 1)).dataset.s = "done"); }
+
+let offset = 0, poll = null, t0 = 0, clockT = null;
+const LOG = $("#log");
+function logLine(text) {
+  if (/^=+$/.test(text.trim()) && text.trim().length > 10) return;      // rule under the heading
+  const stage = text.match(/^\[(\d)\]\s+(.+)$/);
+  if (stage) {
+    setStage(+stage[1]);
+    const s = el("span", "h", `[${stage[1]}]  ${stage[2]}`);
+    LOG.append(s); return;
+  }
+  const cls = /SKIPPED|WARN|no geometry survives/i.test(text) ? "w"
+            : /^\s*->|complete|wrote /i.test(text) ? "g"
+            : /^\s*$/.test(text) ? "d" : "";
+  LOG.append(cls ? el("span", cls, text + "\n") : document.createTextNode(text + "\n"));
+}
+function paintClock() {
+  const s = (Date.now() - t0) / 1000;
+  $("#clock").textContent = `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")} elapsed`;
+}
+$("#runbtn").onclick = async () => {
+  const btn = $("#runbtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> running';
+  LOG.innerHTML = ""; offset = 0; t0 = Date.now();
+  buildStages();
+  clearInterval(clockT); clockT = setInterval(paintClock, 1000); paintClock();
+  await fetch("/api/pipeline/start", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: "{}" });
+  clearInterval(poll);
+  poll = setInterval(tick, 550);
+  tick();
+};
+function stopRun(code) {
+  clearInterval(poll); poll = null;
+  clearInterval(clockT); clockT = null;
+  const btn = $("#runbtn");
+  btn.disabled = false; btn.textContent = "Run pipeline";
+  if (code === "0") { finishStages(); resLoaded = false; loadResults(true); }
+}
+async function tick() {
+  let j;
+  try { j = await (await fetch("/api/pipeline/log?offset=" + offset)).json(); }
+  catch { return; }
+  offset = j.total;
+  for (const ln of j.lines) {
+    if (ln.startsWith("__EXIT__")) {
+      const code = ln.slice(8);
+      LOG.append(el("span", code === "0" ? "g" : "w",
+        `\n[process exited with code ${code}]\n`));
+      stopRun(code);
+      continue;
+    }
+    logLine(ln);
+  }
+  LOG.scrollTop = LOG.scrollHeight;
+  syncHeight();
+  if (!j.running && poll) stopRun("0");
+}
+
+boot();
+</script>
+</body>
+</html>

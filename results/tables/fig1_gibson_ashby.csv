@@ -1,0 +1,11 @@
+architecture,n,C,points
+FDM aligned,1.952,0.96,138
+FDM staggered,3.996,2.858,140
+diamond network,2.427,1.006,60
+diamond sheet,1.556,0.846,54
+gyroid network,2.413,1.098,60
+gyroid sheet,1.791,0.807,60
+iwp network,1.518,0.835,58
+iwp sheet,2.08,1.257,60
+schwarzP network,1.981,1.13,51
+schwarzP sheet,2.025,0.956,55

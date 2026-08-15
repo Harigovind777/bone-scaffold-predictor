@@ -1,8 +1,12 @@
-venv/
-node_modules/
+# Local environment - recreate with the Quick start in README.md
+.venv/
+
+# Python bytecode
 __pycache__/
-*.pyc
-frontend/build/
-*.db
-.env
+*.py[cod]
+
+# macOS
 .DS_Store
+
+# Machine-local Claude Code settings
+.claude/settings.local.json

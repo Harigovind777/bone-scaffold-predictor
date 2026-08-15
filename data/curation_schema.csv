@@ -1,0 +1,57 @@
+column,group,type,unit,required,notes
+record_id,meta,string,-,yes,"Unique key: firstauthor_year_sampleID"
+doi,meta,string,-,yes,"GROUPING KEY for GroupKFold. Never split rows from one DOI across train/test."
+sample_label,meta,string,-,yes,"Group name as printed in the paper e.g. PCL/20HA"
+extractor,meta,string,-,yes,"Team member initials. Needed for inter-rater agreement."
+data_source,meta,enum,-,yes,"table | text | figure_digitised | supplementary"
+polymer_1,chemistry,enum,-,yes,"PCL | PLA | PLGA | PLLA | chitosan | gelatin | collagen | silk_fibroin | alginate | PHB | PVA"
+polymer_1_wt_pct,chemistry,float,wt%,yes,"Of total solid mass"
+polymer_1_Mw,chemistry,float,kDa,no,"Number- or weight-average; record which in Mw_type"
+Mw_type,chemistry,enum,-,no,"Mn | Mw | unspecified"
+polymer_2,chemistry,enum,-,no,"Blank if not a blend"
+polymer_2_wt_pct,chemistry,float,wt%,no,
+ceramic,chemistry,enum,-,no,"HA | beta_TCP | biphasic_CP | bioglass_45S5 | CaCO3 | none"
+ceramic_wt_pct,chemistry,float,wt%,yes,"0 if none. Strongest single predictor of degradation buffering."
+ceramic_particle_size,chemistry,float,um,no,"Nano vs micro changes reinforcement efficiency"
+crosslinker,chemistry,enum,-,no,"genipin | glutaraldehyde | EDC_NHS | photo_LAP | none"
+crosslinker_pct,chemistry,float,%,no,
+solvent,chemistry,enum,-,no,"chloroform | DCM | acetic_acid | HFIP | none_melt"
+fabrication,process,enum,-,yes,"FDM | melt_extrusion | SLA | electrospinning | freeze_drying | salt_leaching | gas_foaming | solvent_casting"
+nozzle_temp,process,float,degC,no,
+nozzle_diameter,process,float,um,no,
+print_speed,process,float,mm/s,no,
+layer_height,process,float,um,no,
+infill_pct,process,float,%,no,
+lay_down_pattern,process,enum,-,no,"0/90 | 0/60/120 | 0/45/90/135"
+freeze_temp,process,float,degC,no,"Freeze-drying route only; sets pore size"
+porogen_size,process,float,um,no,"Salt leaching route only"
+porosity,architecture,float,fraction,yes,"0-1. Record measurement method - values differ by up to 10 pts between methods."
+porosity_method,architecture,enum,-,yes,"gravimetric | uCT | pycnometry | liquid_displacement | design_nominal"
+pore_size_mean,architecture,float,um,yes,"Osteogenic window is 200-500 um"
+pore_size_sd,architecture,float,um,no,
+strut_diameter,architecture,float,um,no,
+unit_cell,architecture,enum,-,no,"gyroid | diamond | schwarzP | iwp | cubic | staggered | random_foam"
+interconnectivity,architecture,float,%,no,"From uCT. Predicts whether pores percolate."
+specific_surface_area,architecture,float,mm2/mm3,no,
+compressive_modulus,mechanical,float,MPa,yes,"PRIMARY TARGET. Trabecular bone reference: 50-800 MPa"
+compressive_strength,mechanical,float,MPa,no,"Trabecular bone reference: 1-12 MPa"
+tensile_modulus,mechanical,float,MPa,no,
+yield_strain,mechanical,float,%,no,
+test_condition,mechanical,enum,-,yes,"dry | wet_PBS_37C | wet_SBF_37C. Wet moduli are typically far lower - model this explicitly."
+strain_rate,mechanical,float,1/min,no,"Viscoelastic polymers are rate sensitive; a major source of cross-paper scatter."
+sample_geometry,mechanical,enum,-,no,"cylinder | cube | prism"
+sample_aspect_ratio,mechanical,float,-,no,
+degradation_medium,degradation,enum,-,no,"PBS | SBF | NaOH_accelerated | lipase | in_vivo"
+degradation_temp,degradation,float,degC,no,
+time_point_weeks,degradation,float,weeks,yes,"0 for as-fabricated. THE KEY COLUMN - one row per time point."
+mass_remaining_pct,degradation,float,%,no,"TRAJECTORY TARGET"
+Mw_remaining_pct,degradation,float,%,no,"TRAJECTORY TARGET - drives modulus loss before mass loss begins"
+modulus_retention_pct,degradation,float,%,no,"TRAJECTORY TARGET - the scarcest and most valuable field"
+porosity_at_t,degradation,float,fraction,no,
+medium_pH,degradation,float,-,no,"Acidic burst below 6.5 signals inflammatory risk"
+cell_type,biological,enum,-,no,"MC3T3 | hMSC | MG63 | SaOS2 | BMSC | none"
+viability_pct,biological,float,%,no,
+viability_day,biological,float,days,no,
+ALP_activity,biological,float,relative,no,"Normalise to the paper's own control - absolute units are not comparable"
+mineralisation,biological,float,relative,no,"Alizarin red S quantification"
+notes,meta,string,-,no,"Anything ambiguous. Flag digitised figures and assumed values here."

@@ -1,0 +1,4 @@
+cls,n,median,q10,q90
+FDM aligned,138,0.705,0.404,1.034
+FDM staggered,140,0.37,0.051,0.936
+TPMS,458,1.0,1.0,1.0
