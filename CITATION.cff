@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this framework, its dataset or its results, please cite it."
+title: "Bone scaffolds — property prediction and inverse design"
+abstract: >-
+  Predicts the mechanical and degradation behaviour of biopolymer bone
+  scaffolds from composition, process and architecture, then runs that model
+  backwards to propose a scaffold worth printing. Combines a voxel FEM sweep
+  over TPMS and FDM architectures, a mechanistic decoder with zero learned
+  parameters, multi-fidelity co-kriging, and validation that is grouped by
+  publication and by architecture rather than random.
+type: software
+authors:
+  - given-names: Harigovind
+    family-names: R
+    email: hg155158@gmail.com
+    affiliation: Chinmaya Vishwa Vidyapeeth
+version: "0.1.0"
+date-released: "2026-08-24"
+keywords:
+  - bone tissue engineering
+  - scaffold design
+  - inverse design
+  - finite element method
+  - multi-fidelity modelling
+  - physics-informed machine learning
+  - data leakage
+references:
+  - type: article
+    title: "Machine learning assisted tissue engineering (MLATE)"
+    abstract: "Tier 1 dataset used here for the printability and leakage audit."
+    authors:
+      - family-names: Rafieyan
+        given-names: Saeed
+    journal: "Biofabrication"
+    volume: 16
+    year: 2024
+    url: "https://github.com/saeedrafieyan/MLATE"
