@@ -53,9 +53,9 @@ strong, defensible thesis contribution — and it costs you one figure.
 
 | | |
 |---|---|
-| Files | `simulated_all.csv` (747 rows), `gibson_ashby_fits.csv` (43 fits), `mesh_convergence.csv` (282 rows) |
+| Files | `simulated_all.csv` (1896 rows), `gibson_ashby_fits.csv` (60 fits), `mesh_convergence.csv` (522 rows) |
 | Code | `sim/tpms_fem.py`, `sim/generate_all.py`, `sim/convergence.py` |
-| Cost | 68 min for 747 samples on 8 workers (`--quick` gives 96 rows in ~30 s) |
+| Cost | ~41 min for 1896 samples on 8 workers (`--quick` gives ~280 rows in ~25 s). The previous solver took 68 min for 747 samples; see `sim/benchmark_solver.py`. |
 
 Both families live in **one table with one schema** — `sim/generate_all.py` supersedes the earlier
 `generate_dataset.py` / `generate_fdm.py`, which wrote separate columns that could not be
@@ -68,44 +68,67 @@ Every sample additionally carries a **second loading axis** (hence an anisotropy
 **stress-concentration factor** as a strength proxy, and µCT-comparable pore size and strut
 thickness from a distance transform rather than a nominal unit-cell figure.
 
-**Validation:** `tools/selftest.py` — 16 checks, all passing. Solid block returns E/Es = 1 on every
+**Validation:** `tools/selftest.py` — 23 checks, all passing. Solid block returns E/Es = 1 on every
 axis; fully open box transports at D_eff/D_bulk = 1; cubic TPMS is elastically isotropic and a 0/90
-print is not. All 747 CG solves converged; 21 geometries have closed porosity and are excluded by
-constraint downstream, not silently.
+print is not. 1891 of 1896 CG solves converged; the five that did not are all the same
+Fischer–Koch S sheet cell at P = 0.88, whose largest connected solid cluster holds 0.2% of its own
+material — they carry `cg_converged = 0` and are dropped by `clean_for_target`, not silently
+averaged in. 121 geometries have closed porosity and are excluded by constraint downstream.
 
 | Family | Rows | Architectures | Porosity range |
 |---|---|---|---|
-| TPMS | 469 | 8 | 0.164 – 0.915 |
-| FDM | 278 | 2 lay-down modes | 0.302 – 0.860 |
+| TPMS | 1425 | 16 | 0.164 – 0.953 |
+| FDM | 471 | 2 lay-down modes | 0.302 – 0.860 |
 
 ### Why this tier matters — it resolves what literature cannot
 
-Fitted Gibson–Ashby parameters, 8 TPMS architectures (median fit R² = 0.993, all ≥ 0.93):
+Fitted Gibson–Ashby parameters, 16 TPMS architectures (median fit R² = 0.976):
 
 | Topology | Mode | n | C | points | R² |
 |---|---|---|---|---|---|
-| iwp | network | 1.52 | 0.84 | 58 | 0.996 |
-| diamond | sheet | 1.56 | 0.85 | 54 | 0.993 |
-| gyroid | sheet | 1.79 | 0.81 | 60 | 0.992 |
-| schwarzP | network | 1.98 | 1.13 | 51 | 0.983 |
-| schwarzP | sheet | 2.03 | 0.96 | 55 | 0.994 |
-| iwp | sheet | 2.08 | 1.26 | 60 | 0.934 |
-| gyroid | network | 2.41 | 1.10 | 60 | 0.988 |
-| diamond | network | 2.43 | 1.01 | 60 | 0.995 |
+| iwp | network | 1.52 | 0.84 | 86 | 0.997 |
+| neovius | sheet | 1.56 | 0.91 | 90 | 0.995 |
+| diamond | sheet | 1.61 | 0.88 | 83 | 0.994 |
+| gyroid | sheet | 1.86 | 0.85 | 90 | 0.993 |
+| schwarzP | network | 1.99 | 1.14 | 74 | 0.981 |
+| schwarzP | sheet | 2.00 | 0.94 | 82 | 0.992 |
+| iwp | sheet | 2.02 | 1.20 | 89 | 0.955 |
+| splitP | sheet | 2.16 | 1.23 | 90 | 0.931 |
+| splitP | network | 2.39 | 1.19 | 82 | 0.972 |
+| gyroid | network | 2.41 | 1.11 | 90 | 0.987 |
+| fischerKochS | network | 2.46 | 1.14 | 84 | 0.984 |
+| diamond | network | 2.63 | 1.17 | 90 | 0.961 |
+| lidinoid | sheet | 2.64 | 1.36 | 90 | 0.821 |
+| fischerKochS | sheet | 2.94 | 2.10 | 89 | 0.403 |
+| neovius | network | 3.56 | 2.12 | 58 | 0.857 |
+| lidinoid | network | 3.91 | 1.79 | 73 | 0.793 |
 
-The exponent spans **1.52 → 2.43** — the stretch-dominated to bending-dominated range, matching
-published values. Published scaffolds cluster at two or three porosities per architecture, so
-literature data can never resolve this. Simulation can, densely and for free. One fit (iwp/sheet,
-C = 1.26 > 1.2) is flagged `C_unphysical`: E cannot exceed Es at full density, so it is a *local*
-fit valid inside its sampled window and must not be extrapolated toward ρ_rel = 1. It is flagged
-rather than dropped — 16 of the 43 fits across both families carry that flag.
+The exponent spans **1.52 → 3.91**. Read the two ends differently. From 1.52 to about 2.5 is the
+stretch-dominated to bending-dominated range Gibson–Ashby describes and published scaffolds occupy.
+Above roughly 3 it is not: those fits (neovius/network n = 3.56, lidinoid/network n = 3.91) come
+with the worst R² in the table (0.40–0.86) and a prefactor well over
+1, which means the power law is being stretched to describe an architecture that is *losing its load
+path* as porosity rises rather than thinning uniformly. The exponent there is a symptom, not a
+material property. Fischer–Koch S sheet is the clearest case: R² = 0.40, i.e. barely a
+power law at all.
+
+Published scaffolds cluster at two or three porosities per architecture, so literature data can
+never resolve any of this. Simulation can, densely and for free — including the negative result that
+some architectures do not obey the law being fitted to them.
+
+`C_unphysical` flags a fitted prefactor above 1.2: E cannot exceed Es at full density, so such a fit
+is *local*, valid inside its sampled porosity window and not to be extrapolated toward ρ_rel = 1.
+Flagged rather than dropped — 23 of the 60 fits across both families carry it, up from 16 of 43,
+because the four new surfaces sit disproportionately at that end.
 
 ### Mesh convergence (`mesh_convergence.csv`)
 
 The same geometries re-solved on a 16/20/24/32/44 ladder, which doubles as the low/high-fidelity
-pairs for the co-kriging stage. Median deviation from the grid-44 answer: 13.2% at grid 16, 6.3% at
-20, 3.7% at 32. Worst-case deviations are far larger (223% at grid 16) — coarse grids do not merely
-add noise, they can lose the load path entirely.
+pairs for the co-kriging stage. Median deviation from the grid-44 answer: 14.0% at grid 16, 6.0% at
+20, 3.5% at 32. Worst-case deviations are far larger (1800% at grid 16) — coarse grids do not merely
+add noise, they can lose the load path entirely. Three of the 108 cases are excluded from that
+summary: their solid phase does not span the specimen even at grid 44, so the reference modulus is
+exactly zero and a relative deviation from it is undefined rather than infinite.
 
 Note filaments thinner than ~3 voxels are not meshed at all, so **no FDM case resolves at grid 16**
 and only half do at grid 20. `run_pipeline.py` therefore picks the coarsest grid that covers *both*
@@ -113,11 +136,11 @@ families as its cheap tier rather than assuming the coarsest one does.
 
 ---
 
-## Tier 2b — FDM strut lattices (within `simulated_all.csv`, 278 rows, grid 44³)
+## Tier 2b — FDM strut lattices (within `simulated_all.csv`, 471 rows, grid 44³)
 
 This is what the biopolymer bone-scaffold literature actually prints: parallel filaments rotated
 90° each layer. Its load path differs fundamentally from a TPMS, so the simulated tier needs it to
-be transferable to Tier 3. All 278 solves converged, none degenerate, porosity 0.30–0.86 — the
+be transferable to Tier 3. All 471 solves converged, porosity 0.30–0.86 — the
 bone-relevant window.
 
 **Modelling note (a trap worth knowing).** Layer height must be tied to filament diameter
@@ -147,8 +170,8 @@ simplest reading of the framework. Two consequences:
    Offsetting alternate layers roughly doubles the exponent. Most scaffold papers neither control
    nor report this.
 
-Per-configuration fits are in `gibson_ashby_fits.csv` (20 rows). Note the `C_unphysical` flag:
-8 fits have **C > 1.2**, which is impossible for a real cellular solid (E cannot exceed Es at
+Per-configuration fits are in `gibson_ashby_fits.csv` (44 FDM rows). Note the `C_unphysical` flag:
+17 fits have **C > 1.2**, which is impossible for a real cellular solid (E cannot exceed Es at
 ρ_rel = 1). Those are *local* fits valid only across the sampled porosity window — **do not
 extrapolate them toward full density.** The worst (staggered 2s/12l, R² = 0.49) shows the power law
 barely holding at all for sparse staggered lattices.
@@ -160,28 +183,48 @@ slicer *infill %* is not measured porosity — shells and over-extrusion break t
 Real validation must come from Tier 3 rows with directly measured porosity. Another reason
 curation is the critical path.
 
-**Proof it adds value** (predicting `E_rel`):
+**What the model ladder actually reports** (predicting `E_rel_z`, leave-one-architecture-out
+over 18 architectures — see `results/metrics.json`):
 
 | Model | R² |
 |---|---|
-| Gibson–Ashby single global power law | 0.444 |
-| Random forest, leave-one-architecture-out | **0.841** |
-| Random forest, random 5-fold | 0.947 (optimistic) |
+| Gibson–Ashby single global power law | **0.783** |
+| Gradient boosting, no physics | 0.654 |
+| Gibson–Ashby prior + learned residual | 0.647 |
+| Same residual model, random 5-fold | 0.979 (optimistic) |
 
-Learning topology-dependent n and C nearly doubles R² over textbook theory, and it holds up on
-*architectures never seen in training*. That is the core thesis of the framework, demonstrated.
+**The textbook power law wins.** On an architecture the model has never seen, neither learned
+variant beats the two-parameter law it is built on. That is a result, not a failure: it says the
+simulated tier's `E_rel` is a clean power law in relative density with no residual structure that
+transfers between topologies, and it is why `tools/predict.py` uses the fitted (n, C) rather than a
+surrogate. Whether a learned residual earns its place is a question for Tier 3 data, where the
+scatter is real rather than numerical.
+
+> **Superseded numbers, kept here as a warning.** Earlier revisions of this file reported
+> R² = 0.444 for the power law and **0.841** for a random forest under the same protocol, and
+> concluded that learning topology-dependent (n, C) "nearly doubles R² over textbook theory".
+> Those came from the 192-row, TPMS-only sweep preserved in `tpms_simulated.csv` — the legacy
+> file this README itself describes as read by nothing downstream. They disagreed with
+> `results/metrics.json` by roughly 0.3 R², in the flattering direction, inside the document that
+> teaches the leakage lesson. Regenerate numbers; do not retype them.
 
 ### A real finding already in the data
-14 of 192 samples have **non-percolating (closed-cell) porosity** — mostly sheet-mode Schwarz-P at
-P = 0.31–0.41. Those scaffolds are useless for bone ingrowth regardless of how good their modulus
+121 of 1896 samples have **non-percolating (closed-cell) porosity**. Those scaffolds are useless for bone ingrowth regardless of how good their modulus
 looks. `pore_connected` flags them, and it should be a hard constraint in the inverse-design stage.
 
 ### Limits — state these in your thesis
-- 20³ voxel grid: modulus is mesh-sensitive; run a convergence study at 30³/40³ on a few points.
+- Mesh sensitivity is now measured rather than warned about: the sweep runs at 32³ (TPMS)
+  and 44³ (FDM), and `mesh_convergence.csv` gives the deviation of every coarser grid from
+  the finest. The residual caveat is that 44³ is the finest rung, so it anchors the ladder
+  and cannot itself be checked against anything.
 - `E_rel` is *relative* to solid-phase modulus. Multiply by Halpin–Tsai `Es` for real MPa.
 - Transport is effective diffusivity from a Laplace solve, **not** Stokes permeability.
 - Linear elastic and small-strain — no yield, no buckling, no post-collapse behaviour.
 - `nominal_pore_um` scales with the assumed `unit_cell_mm`; it is a design variable, not a result.
+- The compression solve meshes the solid phase only. Void voxels carry no equations, so a
+  solid phase that touches none of the loaded faces returns E_rel = 0 rather than the old
+  ersatz-stiffness floor. That is the correct reading — a platen cannot compress what it
+  does not touch — but it means `structurally_dead` rows are exactly zero, not merely small.
 
 ---
 

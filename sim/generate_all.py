@@ -11,6 +11,10 @@ What each sample now carries beyond the earlier sweeps:
   * a stress-concentration factor -> a strength proxy from a linear-elastic solve.
   * micro-CT-comparable pore size and strut thickness from a distance transform, rather
     than a nominal pore size back-computed from the unit cell.
+  * effective diffusivity along BOTH axes, hence a transport anisotropy ratio. This was
+    nominally present before but was not being measured: effective_diffusivity looped over
+    the same name as its own `axis` argument, so D_eff_x came back as an exact copy of
+    D_eff_z on every row.
 
 Run:  .venv/bin/python sim/generate_all.py [--quick]
 """
@@ -32,9 +36,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tpms_fem import (TOPOLOGIES, build_at_porosity, fdm_lattice, compression_response,
-                      effective_diffusivity, specific_surface, largest_connected_fraction,
-                      morphometry)
+from tpms_fem import (TOPOLOGIES, build_at_porosity, fdm_lattice,
+                      compression_response_axes, effective_diffusivity, specific_surface,
+                      largest_connected_fraction, morphometry)
 
 # Physical size of the simulated cube. Every length in the output is scaled by this, so
 # it is the one number to change if you want to model a different specimen size.
@@ -44,12 +48,26 @@ TPMS_GRID = 32
 FDM_GRID = 44          # thin filaments at 16 layers need ~3.4 voxels across; 44 gives that
 MODES = ("network", "sheet")
 CELLS = (1, 2)
-TPMS_POROSITIES = np.round(np.linspace(0.20, 0.90, 30), 4)
 
-FDM_STRUTS = (2, 3, 4, 5)
+# The sweep was widened once the compression solve got ~4x cheaper (see
+# sim/benchmark_solver.py). Grids are unchanged, deliberately - they are what
+# sim/convergence.py characterises, and moving them would invalidate that study - so the
+# extra budget went into the two axes that actually buy something:
+#
+#   ARCHITECTURES. Eight topologies rather than four. Leave-one-architecture-out is the
+#   headline protocol and every architecture is one fold, so this is the only lever that
+#   improves the honest score's precision rather than just its sample size.
+#
+#   POROSITY DENSITY. 45 levels rather than 30, out to 0.92. A Gibson-Ashby exponent is
+#   fitted per architecture from these points alone; the literature cannot resolve it
+#   because published scaffolds cluster at two or three porosities per paper, so
+#   resolution along this axis is the simulated tier's whole reason to exist.
+TPMS_POROSITIES = np.round(np.linspace(0.20, 0.92, 45), 4)
+
+FDM_STRUTS = (2, 3, 4, 5, 6)
 FDM_LAYERS = (8, 10, 12, 14, 16)
 FDM_STAGGER = (False, True)
-FDM_DIAMETER_STEPS = 8
+FDM_DIAMETER_STEPS = 12
 POROSITY_WINDOW = (0.30, 0.92)
 
 
@@ -59,8 +77,10 @@ POROSITY_WINDOW = (0.30, 0.92)
 
 def evaluate(mask, grid, domain_mm=DOMAIN_MM):
     """Run the full physics stack on a voxel mask. Shared by both families."""
-    rz = compression_response(mask, axis=2)
-    rx = compression_response(mask, axis=0)
+    # One assembly, both loading axes: the global stiffness does not depend on which
+    # face is pushed, and rebuilding it per axis was pure repetition.
+    r = compression_response_axes(mask, (2, 0))
+    rz, rx = r[2], r[0]
     d_z = effective_diffusivity(mask, axis=2)
     d_x = effective_diffusivity(mask, axis=0)
     porosity = 1.0 - float(mask.mean())
@@ -80,6 +100,11 @@ def evaluate(mask, grid, domain_mm=DOMAIN_MM):
         K_sc_x=round(rx["stress_concentration"], 3),
         D_eff_z=round(float(d_z), 6),
         D_eff_x=round(float(d_x), 6),
+        # Transport anisotropy, the counterpart of anisotropy_z_over_x. Until the axis
+        # argument of effective_diffusivity was honoured this column was a copy of D_eff_z
+        # on all 747 rows, so a 0/90 lay-down - which is plainly not isotropic in
+        # transport either - reported a ratio of exactly 1.
+        D_anisotropy_z_over_x=round(float(d_z / d_x), 4) if d_x > 1e-9 else np.nan,
         tortuosity_z=round(porosity / d_z, 4) if connected else np.nan,
         specific_surface_per_mm=round(specific_surface(mask) / domain_mm, 4),
         solid_connectivity=round(largest_connected_fraction(mask), 4),
@@ -228,7 +253,8 @@ def main():
              "strut_d", "strut_spacing", "n_struts", "n_layers", "stagger",
              "target_porosity", "porosity", "relative_density",
              "E_rel_z", "E_rel_x", "anisotropy_z_over_x", "K_sc_z", "K_sc_x",
-             "D_eff_z", "D_eff_x", "tortuosity_z", "specific_surface_per_mm",
+             "D_eff_z", "D_eff_x", "D_anisotropy_z_over_x", "tortuosity_z",
+             "specific_surface_per_mm",
              "pore_size_um", "strut_thickness_um", "solid_connectivity",
              "pore_connected", "cg_converged"]
     df = df[order].sort_values(["family", "topology", "mode", "porosity"]).reset_index(drop=True)

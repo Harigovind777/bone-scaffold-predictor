@@ -75,8 +75,8 @@ def fig_gibson_ashby(sim):
     """
     Small multiples, one architecture per panel, log-log.
 
-    Faceted rather than coloured because there are ten architectures and no palette
-    keeps ten identities separable in a scatter. Each panel carries its own fitted
+    Faceted rather than coloured because there are eighteen architectures and no palette
+    keeps even ten identities separable in a scatter. Each panel carries its own fitted
     exponent, which is the number the panel exists to communicate; the shared dashed
     line is the textbook n = 2 so the departure is readable at a glance.
     """
@@ -205,6 +205,11 @@ def fig_convergence(conv):
     """Deviation from the finest grid. Answers the 'is 20^3 enough?' caveat with a number."""
     finest = conv.sort_values("grid").groupby("case").last()
     d = conv.join(finest[["E_rel_z"]].rename(columns={"E_rel_z": "E_ref"}), on="case")
+    # Non-spanning cases have E_ref == 0 exactly, so their relative deviation is undefined.
+    # Excluded here as well as in run_pipeline, so the figure and the metric agree.
+    n_cases = d.case.nunique()
+    d = d[d.E_ref > C.DEAD_MODULUS]
+    n_excluded = n_cases - d.case.nunique()
     d["pct_err"] = 100 * (d.E_rel_z - d.E_ref).abs() / d.E_ref
     summ = (d.groupby(["family", "grid"])["pct_err"]
             .agg(median="median", p90=lambda s: s.quantile(0.9)).reset_index())
@@ -225,8 +230,10 @@ def fig_convergence(conv):
     ax.set_ylabel("|deviation| from finest grid, %")
     ax.set_xticks(sorted(conv.grid.unique()))
     ax.legend(frameon=False, loc="upper right")
-    _title(ax, "Mesh sensitivity of the apparent modulus",
-           "line: median across geometries · band: up to the 90th percentile")
+    sub = "line: median across geometries · band: up to the 90th percentile"
+    if n_excluded:
+        sub += f" · {n_excluded} non-spanning cases excluded"
+    _title(ax, "Mesh sensitivity of the apparent modulus", sub)
     fig.tight_layout()
     return _save(fig, "fig3_convergence.png", summ.round(3))
 
@@ -267,37 +274,77 @@ def fig_multifidelity(mf):
 
 def fig_anisotropy(sim):
     """
-    E_z/E_x by architecture class. A 0/90 print is not isotropic, and the ratio depends
-    on the lay-down offset - a variable most papers neither control nor report.
+    Anisotropy in BOTH transported quantities: stiffness on the left, diffusivity on
+    the right.
+
+    A 0/90 print is not isotropic in either, and the ratio depends on the lay-down
+    offset - a variable most papers neither control nor report. The transport panel only
+    became plottable once effective_diffusivity stopped ignoring its own axis argument;
+    before that D_eff_x was a copy of D_eff_z and every ratio here was exactly 1.000,
+    which would have read as a physical result rather than a bug.
     """
     sim = sim[(sim.anisotropy_z_over_x > 0) & (sim.cg_converged == 1)
               & (sim.get("structurally_dead", 0) == 0)].copy()
     sim["cls"] = np.where(sim.family == "TPMS", "TPMS", "FDM " + sim["mode"])
     classes = [c for c in ["TPMS", "FDM aligned", "FDM staggered"] if c in set(sim.cls)]
 
-    fig, ax = plt.subplots(figsize=(6.6, 4.2))
-    for i, cls in enumerate(classes):
-        g = sim[sim.cls == cls]
-        ax.scatter(g.porosity, g.anisotropy_z_over_x, s=26, color=SERIES[i],
-                   edgecolor=SURFACE, linewidth=0.6, alpha=0.9, label=cls)
-        gx = g.sort_values("porosity")
-        ax.text(gx.porosity.iloc[-1], gx.anisotropy_z_over_x.iloc[-1], f"  {cls}",
-                fontsize=9, color=SERIES[i], fontweight="bold", va="center")
+    has_transport = ("D_anisotropy_z_over_x" in sim.columns
+                     and sim.D_anisotropy_z_over_x.gt(0).any())
+    fig, axes = plt.subplots(1, 2 if has_transport else 1,
+                             figsize=(11 if has_transport else 6.6, 4.2))
+    axes = np.atleast_1d(axes)
 
-    ax.axhline(1.0, ls="--", lw=1.2, color=MUTED)
-    ax.text(sim.porosity.min(), 1.04, "isotropic", fontsize=8.5, color=MUTED)
-    ax.set_yscale("log")
-    ax.set_xlabel("porosity")
-    ax.set_ylabel("$E_z / E_x$  (build direction / in-plane)")
-    ax.set_xlim(right=sim.porosity.max() * 1.16)
-    ax.legend(frameon=False, loc="lower left")
-    _title(ax, "The compression axis changes the answer several-fold",
-           "TPMS architectures are cubic and land on 1.0 · printed lattices do not")
-    tbl = (sim.groupby("cls")["anisotropy_z_over_x"]
-           .agg(n="size", median="median", q10=lambda s: s.quantile(.1),
-                q90=lambda s: s.quantile(.9)).reset_index().round(3))
+    # `direct`: whether the series separate enough to carry right-edge labels. They do
+    # in stiffness, where a staggered lay-down runs an order of magnitude off isotropic.
+    # They do not in transport - TPMS is exactly 1.0 and the printed lattices stay inside
+    # +-25% of it - so that panel is identified by its legend alone, the same call fig3
+    # and fig4 make where their curves converge.
+    panels = [("anisotropy_z_over_x", axes[0], True,
+               "$E_z / E_x$  (build direction / in-plane)",
+               "The compression axis changes the answer several-fold",
+               "TPMS architectures are cubic and land on 1.0 · printed lattices do not")]
+    if has_transport:
+        panels.append(("D_anisotropy_z_over_x", axes[1], False,
+                       "$D_z / D_x$  (build direction / in-plane)",
+                       "So does the transport axis",
+                       "aligned pores stack into straight channels; staggering breaks them"))
+
+    for col, ax, direct, ylabel, title, subtitle in panels:
+        g_all = sim[sim[col] > 0]
+        labels = []
+        for i, cls in enumerate(classes):
+            g = g_all[g_all.cls == cls]
+            if g.empty:
+                continue
+            ax.scatter(g.porosity, g[col], s=26, color=SERIES[i],
+                       edgecolor=SURFACE, linewidth=0.6, alpha=0.9, label=cls)
+            gx = g.sort_values("porosity")
+            labels.append((float(gx[col].iloc[-1]), float(gx.porosity.iloc[-1]),
+                           f"  {cls}", SERIES[i], "bold"))
+        ax.axhline(1.0, ls="--", lw=1.2, color=MUTED)
+        ax.text(g_all.porosity.min(), 1.04, "isotropic", fontsize=8.5, color=MUTED)
+        ax.set_yscale("log")
+        ax.set_xlabel("porosity")
+        ax.set_ylabel(ylabel)
+        ax.set_xlim(right=g_all.porosity.max() * 1.16)
+        ax.legend(frameon=False, loc="lower left")
+        _title(ax, title, subtitle)
+        if direct:
+            # After the scale and the limits are final, never before: the labels are
+            # placed against the axis geometry.
+            _stack_right_labels(ax, labels)
+
+    agg = dict(n="size", median="median", q10=lambda s: s.quantile(.1),
+               q90=lambda s: s.quantile(.9))
+    tbl = sim.groupby("cls")["anisotropy_z_over_x"].agg(**agg).reset_index()
+    tbl.columns = ["cls", "n", "E_median", "E_q10", "E_q90"]
+    if has_transport:
+        t2 = (sim[sim.D_anisotropy_z_over_x > 0]
+              .groupby("cls")["D_anisotropy_z_over_x"].agg(**agg).reset_index())
+        t2.columns = ["cls", "D_n", "D_median", "D_q10", "D_q90"]
+        tbl = tbl.merge(t2, on="cls", how="left")
     fig.tight_layout()
-    return _save(fig, "fig5_anisotropy.png", tbl)
+    return _save(fig, "fig5_anisotropy.png", tbl.round(3))
 
 
 def _stack_right_labels(ax, entries, min_gap_frac=0.058):
@@ -308,15 +355,28 @@ def _stack_right_labels(ax, entries, min_gap_frac=0.058):
     the new bone converge on the native line by construction - that convergence IS the
     result - so three labels arrive at one y and overprint into an unreadable smear.
     Sorting by value and enforcing a minimum gap keeps label order faithful to curve order.
+
+    Positions are converted to axes fraction before the gap is applied, so the same
+    minimum spacing means the same thing on a log scale as on a linear one - fig5's
+    panels are log-y, where a gap measured in data units is enormous at the top of the
+    axis and invisible at the bottom. On a linear axis this is identical to measuring
+    the gap as a fraction of the y range, which is what it used to do.
     """
-    lo, hi = ax.get_ylim()
-    gap = (hi - lo) * min_gap_frac
-    items = sorted(entries, key=lambda e: e[0])
+    from matplotlib.transforms import blended_transform_factory
+    ax.autoscale_view()          # transData is stale until the limits are resolved; the
+                                 # earlier version got this for free from get_ylim()
+    to_frac = ax.transAxes.inverted()
+    items = sorted(
+        ((float(to_frac.transform(ax.transData.transform((0, y)))[1]), x, t, c, w)
+         for y, x, t, c, w in entries),
+        key=lambda e: e[0])
     for i in range(1, len(items)):
-        if items[i][0] - items[i - 1][0] < gap:
-            items[i] = (items[i - 1][0] + gap,) + tuple(items[i][1:])
-    for y, x, text, color, weight in items:
-        ax.text(x, y, text, fontsize=9, color=color, fontweight=weight, va="center")
+        if items[i][0] - items[i - 1][0] < min_gap_frac:
+            items[i] = (items[i - 1][0] + min_gap_frac,) + tuple(items[i][1:])
+    tr = blended_transform_factory(ax.transData, ax.transAxes)
+    for yf, x, text, color, weight in items:
+        ax.text(x, yf, text, transform=tr, fontsize=9, color=color,
+                fontweight=weight, va="center")
 
 
 def fig_design(traj, cand):

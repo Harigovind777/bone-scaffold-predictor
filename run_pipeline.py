@@ -179,16 +179,36 @@ def stage_fusion():
     hi_grid = conv.grid.max()
     finest = conv.sort_values("grid").groupby("case").last()
     d = conv.join(finest[["E_rel_z"]].rename(columns={"E_rel_z": "E_ref"}), on="case")
+    # A case whose solid phase does not span the specimen at the finest grid has a
+    # reference modulus of exactly zero, and a percentage deviation from zero is
+    # undefined - not merely large. Excluded and counted rather than left to poison the
+    # summary with inf.
+    n_cases = d.case.nunique()
+    d = d[d.E_ref > C.DEAD_MODULUS]
+    n_excluded = n_cases - d.case.nunique()
     d["pct_err"] = 100 * (d.E_rel_z - d.E_ref).abs() / d.E_ref
     summ = d.groupby("grid")["pct_err"].agg(["median", "max"]).round(2)
-    print(f"Deviation from the grid-{hi_grid} answer:")
+    print(f"Deviation from the grid-{hi_grid} answer "
+          f"({n_cases - n_excluded} cases; {n_excluded} excluded as non-spanning):")
     print(summ.to_string())
     RESULTS["convergence"] = dict(
-        skipped=False, finest_grid=int(hi_grid),
+        skipped=False, finest_grid=int(hi_grid), n_cases=int(n_cases - n_excluded),
+        n_excluded_nonspanning=int(n_excluded),
         by_grid={int(g): dict(median_pct=float(r["median"]), max_pct=float(r["max"]))
                  for g, r in summ.iterrows()})
 
     # ---- paired low/high fidelity ----
+    # Same exclusion as the convergence table, and for a sharper reason here. The
+    # compression solve returns E_rel = 0 for a solid phase that spans nothing, and the
+    # GP is fitted on log E: clipped at 1e-9 that is -20.7 against a normal range of
+    # -6 to -1, so one non-spanning row dominates the kernel and drags the whole fusion
+    # experiment negative. A geometry that carries no load has no modulus to fuse.
+    #
+    # The filter is per ROW, not per case. Filtering only on the finest grid leaves a
+    # case that spans at 44 but not at 20 in the cheap tier with E = 0, which is exactly
+    # the row that does the damage - it sits in y_low, the source the fused model is
+    # supposed to trust. Pairing then intersects what survives at each grid.
+    conv = conv[conv.E_rel_z > C.DEAD_MODULUS]
     high = conv[conv.grid == hi_grid].set_index("case")
     hi_families = set(high.family)
 
@@ -231,7 +251,10 @@ def stage_fusion():
 
     print(f"\nfusion: low=grid {lo_grid} ({len(cases)} cases) · "
           f"high=grid {hi_grid} ({len(pool_cases)} available, {len(test_cases)} held out)")
-    budgets = [b for b in (4, 8, 12, 16, 24, 32) if b <= len(pool_cases)]
+    # Budgets are filtered against the pool rather than fixed, so widening the
+    # convergence sweep to every topology extends the curve instead of truncating it -
+    # and the top of the curve is where "the cheap source stops helping" becomes visible.
+    budgets = [b for b in (4, 8, 12, 16, 24, 32, 48, 64) if b <= len(pool_cases)]
     mf = fusion.fidelity_experiment(X_low, y_low, X_high, y_high, X_test, y_test,
                                     n_high_grid=budgets)
     piv = mf.pivot_table(index="n_high", columns="model", values="r2").round(3)

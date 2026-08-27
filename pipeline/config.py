@@ -35,8 +35,8 @@ DESIGN_NUMERIC = [
     "stagger", "specific_surface_per_mm", "pore_size_um", "strut_thickness_um",
 ]
 DESIGN_CATEGORICAL = ["family", "topology", "mode"]
-SOLVED_ONLY = ["D_eff_z", "D_eff_x", "tortuosity_z", "solid_connectivity",
-               "K_sc_z", "K_sc_x", "anisotropy_z_over_x"]
+SOLVED_ONLY = ["D_eff_z", "D_eff_x", "D_anisotropy_z_over_x", "tortuosity_z",
+               "solid_connectivity", "K_sc_z", "K_sc_x", "anisotropy_z_over_x"]
 
 TARGETS = {
     "E_rel_z": "log",       # spans decades -> fit in log space

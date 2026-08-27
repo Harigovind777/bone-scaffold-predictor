@@ -11,7 +11,7 @@ built in three tiers of decreasing volume and increasing trustworthiness.
 
 ```
 Tier 1  MLATE            borrowed, 1171 rows   printability & biology, no mechanics
-Tier 2  simulated        generated here        dense, exact, idealised
+Tier 2  simulated        1896 rows here       dense, exact, idealised
 Tier 3  curated papers   the critical path     scarce, noisy, real
 ```
 
@@ -27,7 +27,7 @@ co-kriging rather than pooled.
 python3 -m venv .venv
 .venv/bin/pip install numpy pandas scikit-learn scipy matplotlib openpyxl
 
-.venv/bin/python sim/generate_all.py     # Tier 2+2b, parallel   (~90 min, or --quick for ~30 s)
+.venv/bin/python sim/generate_all.py     # Tier 2+2b, parallel   (~41 min, or --quick for ~25 s)
 .venv/bin/python sim/convergence.py      # mesh ladder + fidelity pairs
 .venv/bin/python run_pipeline.py         # everything downstream -> results/
 ```
@@ -49,7 +49,7 @@ Three tabs, and it drives the real code — not a mock-up:
 - **Predict** — pick an architecture and chemistry, get E₀, strength, the 52-week
   trajectory charted, every clinical constraint as a pass/fail chip, and a provenance
   block saying where the number came from. Tick *solve this exact geometry* to run the
-  voxel FEM live (~5 s) on something the sweep never sampled.
+  voxel FEM live (~1 s) on something the sweep never sampled.
 - **Results** — the dashboard: dataset size, the model ladder, the leakage inflation, the
   fusion result, and all six figures (click to enlarge).
 - **Pipeline** — a **Run pipeline** button that executes `run_pipeline.py` and streams its
@@ -91,10 +91,11 @@ VERDICT
 Exit code is 0 when feasible, 1 when not and 2 on a bad request, so it scripts. Add
 `--json` for machine-readable output, `--list-configs` for every architecture predictable
 without a fresh solve, and `--solve` to mesh and solve a geometry the sweep never sampled
-(~5 s). Importable too: `from tools.predict import predict`.
+(~1 s, measured end-to-end through the web API). Importable too:
+`from tools.predict import predict`.
 
 **What predicts what.** The modulus is *not* taken from a learned surrogate — under
-leave-one-architecture-out the surrogate scores R² = 0.55 against 0.73 for the
+leave-one-architecture-out the surrogate scores R² = 0.65 against 0.78 for the
 Gibson–Ashby law it is built on, so using it would dress up a worse predictor as a better
 one. What runs is the fitted (n, C) for that architecture plus the zero-learned-parameter
 decoder in `sim/physics.py`. Where a measured `E_rel` exists at the requested porosity, C
@@ -115,6 +116,7 @@ at and it says so loudly rather than returning a confident number.
 | `sim/physics.py` | Mechanistic decoder — Halpin–Tsai, hydrolysis kinetics, Gibson–Ashby, bone healing. **Zero learned parameters** |
 | `sim/generate_all.py` | Parallel sweep → `data/simulated_all.csv` (one unified schema for both families) |
 | `sim/convergence.py` | Mesh ladder → `data/mesh_convergence.csv`, doubling as low/high-fidelity pairs |
+| `sim/benchmark_solver.py` | The compression-solver measurement: solid-only vs ersatz-void assembly, against a void→0 reference |
 | `pipeline/data.py` | Loaders + the design/solved feature contract |
 | `pipeline/validation.py` | Grouped splitters and the leakage diagnostic |
 | `pipeline/models.py` | The model ladder, physics → physics-informed |
@@ -124,7 +126,7 @@ at and it says so loudly rather than returning a confident number.
 | `webapp/server.py` | **The web interface** — stdlib HTTP server over the same code paths |
 | `webapp/index.html` | Single-page UI: predict, results dashboard, live pipeline runner |
 | `tools/predict.py` | **The prediction interface** — one scaffold spec → properties, trajectory, verdict, provenance |
-| `tools/selftest.py` | 16 physics and pipeline-contract checks |
+| `tools/selftest.py` | 23 physics and pipeline-contract checks |
 | `tools/validate_curation.py` | Gate for Tier 3 curation sheets |
 | `results/` | Everything the pipeline produces — `README.md`, `metrics.json`, `figures/`, `tables/` |
 

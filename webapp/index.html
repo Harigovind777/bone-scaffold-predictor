@@ -325,6 +325,10 @@ input[type=range]::-moz-range-thumb{
 }
 .note .bang{font-family:var(--display);font-weight:700;color:var(--warn);flex:none}
 .note b{color:var(--ink)}
+.note .why{margin-top:10px;display:flex;flex-direction:column;gap:3px}
+.note .why .lbl{font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:600}
+.note .why .fix{color:var(--ink-2)}
+.note .why .fix::before{content:"→ ";color:var(--warn);font-weight:700}
 
 /* -------------------------------------------------------------- charts --- */
 .chart-wrap{position:relative}
@@ -572,6 +576,8 @@ pre.console .d{color:#6C6883}
                 <select id="topology">
                   <option>gyroid</option><option>diamond</option>
                   <option>schwarzP</option><option>iwp</option>
+                  <option>fischerKochS</option><option>neovius</option>
+                  <option>lidinoid</option><option>splitP</option>
                 </select>
               </div>
               <div class="duo">
@@ -781,16 +787,45 @@ const NG = 34;                       // bisection grid — coarse enough to be i
 let field3 = null, fieldKey = "", threshold = 0, zPlane = 0.5;
 let latticeRunning = true, dragging = false, drifting = !REDUCED, rafId = null;
 
+/* The eight level sets of sim/tpms_fem.py:tpms_field, in ONE place. They used to be
+   written out twice - once for the bisection field, once for the section - and both
+   copies ended in a bare `:` fallback, so a topology added to the picker but missed here
+   silently rendered as IWP instead of failing. Double-angle identities keep the
+   cos(2x)/sin(2x) terms on the six trig calls the caller has already made. */
+function tpmsLevelSet(kind, sx, cx, sy, cy, sz, cz) {
+  const s2x = 2 * sx * cx, s2y = 2 * sy * cy, s2z = 2 * sz * cz;
+  const c2x = 2 * cx * cx - 1, c2y = 2 * cy * cy - 1, c2z = 2 * cz * cz - 1;
+  switch (kind) {
+    case "diamond":  return sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz;
+    case "schwarzP": return cx + cy + cz;
+    case "iwp":      return 2 * (cx * cy + cy * cz + cz * cx) - (c2x + c2y + c2z);
+    case "fischerKochS": return c2x * sy * cz + c2y * sz * cx + c2z * sx * cy;
+    case "neovius":  return 3 * (cx + cy + cz) + 4 * cx * cy * cz;
+    case "lidinoid": return 0.5 * (s2x * cy * sz + s2y * cz * sx + s2z * cx * sy)
+                          - 0.5 * (c2x * c2y + c2y * c2z + c2z * c2x) + 0.15;
+    case "splitP":   return 1.1 * (s2x * sz * cy + s2y * sx * cz + s2z * sy * cx)
+                          - 0.2 * (c2x * c2y + c2y * c2z + c2z * c2x)
+                          - 0.4 * (c2x + c2y + c2z);
+    default:         return sx * cy + sy * cz + sz * cx;              // gyroid
+  }
+}
+
+/* Antialias width, as a multiple of the gyroid's. The section fades across the level set
+   instead of hard-thresholding it, so the band has to scale with |grad f| or a steep
+   surface renders with a hairline edge and a shallow one with a smear. Measured as the
+   mean gradient magnitude on a 48^3 grid, not eyeballed - which is how schwarzP came to
+   be listed at 2x when it is actually 1.0x, its wide RANGE having been mistaken for a
+   steep gradient. */
+const TPMS_GRAD = { gyroid: 1.0, diamond: 1.0, schwarzP: 1.0, iwp: 2.8,
+                    fischerKochS: 1.2, neovius: 3.5, lidinoid: 1.1, splitP: 1.6 };
+
 function tpmsField(kind, n, cells) {
   const f = new Float32Array(n * n * n), S = 2 * Math.PI * cells;
   let i = 0;
   for (let a = 0; a < n; a++) { const x = (a + 0.5) / n * S, sx = Math.sin(x), cx = Math.cos(x);
     for (let b = 0; b < n; b++) { const y = (b + 0.5) / n * S, sy = Math.sin(y), cy = Math.cos(y);
       for (let c = 0; c < n; c++) { const z = (c + 0.5) / n * S, sz = Math.sin(z), cz = Math.cos(z);
-        f[i++] = kind === "gyroid"   ? sx * cy + sy * cz + sz * cx
-              : kind === "diamond"  ? sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz
-              : kind === "schwarzP" ? cx + cy + cz
-              : 2 * (cx * cy + cy * cz + cz * cx) - (Math.cos(2 * x) + Math.cos(2 * y) + Math.cos(2 * z));
+        f[i++] = tpmsLevelSet(kind, sx, cx, sy, cy, sz, cz);
       } } }
   return f;
 }
@@ -874,16 +909,13 @@ function drawLattice(force) {
     ensureField(sp);
     if (force !== "z") threshold = solveThreshold(field3, sp.tmode, sp.porosity);
     const S = 2 * Math.PI * sp.cells, zc = zPlane * S, sz = Math.sin(zc), cz = Math.cos(zc);
-    const soft = 0.13 * (sp.topology === "iwp" ? 4 : sp.topology === "schwarzP" ? 2 : 1);
+    const soft = 0.13 * (TPMS_GRAD[sp.topology] || 1);
     let i = 0;
     for (let b = 0; b < RES; b++) {
       const y = (b + 0.5) / RES * S, sy = Math.sin(y), cy = Math.cos(y);
       for (let a = 0; a < RES; a++) {
         const x = (a + 0.5) / RES * S, sx = Math.sin(x), cx = Math.cos(x);
-        const f = sp.topology === "gyroid"   ? sx * cy + sy * cz + sz * cx
-                : sp.topology === "diamond"  ? sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz
-                : sp.topology === "schwarzP" ? cx + cy + cz
-                : 2 * (cx * cy + cy * cz + cz * cx) - (Math.cos(2 * x) + Math.cos(2 * y) + Math.cos(2 * z));
+        const f = tpmsLevelSet(sp.topology, sx, cx, sy, cy, sz, cz);
         // antialias by fading across the level set rather than hard-thresholding
         const t = sp.tmode === "sheet"
           ? clamp((threshold - Math.abs(f)) / soft + 0.5, 0, 1)
@@ -1277,6 +1309,69 @@ const WHY = {
          "kills osteoblasts faster than they colonise the scaffold."
 };
 
+/* ==========================================================================
+   Why a geometry was rejected, in terms the form can act on
+   ==========================================================================
+   The constraint filter returns a reason string ("pore outside 200-600 um"), which is
+   accurate and useless on its own: it does not say what this scaffold measured, nor which
+   control moves it. The default form state - one unit cell across the 2 mm domain - is
+   itself a rejection, at a ~1050 um pore, so this is the first thing many readers see.
+   Windows come from /api/meta, which reads pipeline/config.py, so they cannot drift out
+   of step with the filter that applied them. */
+function rejectionDetail(reason, g, sp, win) {
+  const um = v => `${Math.round(v)}&nbsp;µm`;
+  const range = (a, b) => `${Math.round(a)}&ndash;${Math.round(b)}&nbsp;µm`;
+  const cells = +sp.n_cells || 1, isTPMS = sp.family === "TPMS";
+
+  if (reason.startsWith("closed porosity")) return {
+    measured: "the pore phase does not percolate &mdash; a sealed void, not a pore network",
+    hint: isTPMS
+      ? "Sheet and network modes seal at different porosities; try the other one, or move "
+        + "the porosity slider up."
+      : "Widen the strut spacing, or raise the porosity."
+  };
+
+  if (reason.startsWith("porosity outside")) {
+    const [lo, hi] = win.porosity;
+    return { measured: `porosity ${(sp.porosity * 100).toFixed(1)}% &mdash; the window is `
+                       + `${(lo * 100).toFixed(0)}-${(hi * 100).toFixed(0)}%`,
+             hint: "Move the porosity slider into the window." };
+  }
+
+  if (reason.startsWith("pore outside")) {
+    const [lo, hi] = win.pore_um, pore = g.pore_size_um;
+    const measured = `pore ${um(pore)} &mdash; the window is ${range(lo, hi)}`;
+    // Pore size scales with the unit cell, i.e. inversely with the cell count, so the
+    // count that would land inside the window is arithmetic rather than a guess.
+    if (isTPMS) {
+      const want = pore > hi ? Math.ceil(cells * pore / hi) : Math.floor(cells * pore / lo);
+      const reachable = want >= 1 && want <= 2 && want !== cells;
+      return { measured, hint: reachable
+        ? `Try <b>${want} unit cell${want > 1 ? "s" : ""}</b> &mdash; the pore scales with `
+          + `the cell size, so this brings it to about ${um(pore * cells / want)}.`
+        : (pore > hi
+            ? "Every available cell count leaves this pore too large; a smaller specimen "
+              + "or a different topology is needed."
+            : "Even one cell leaves this pore too small; lower the porosity or pick a "
+              + "coarser topology.") };
+    }
+    return { measured, hint: pore > hi
+      ? "Raise the strut count &mdash; more filaments per layer means narrower gaps."
+      : "Lower the strut count, or raise the porosity." };
+  }
+
+  if (reason.startsWith("strut under")) return {
+    measured: `strut ${um(g.strut_thickness_um)} &mdash; the printable floor is `
+              + `${um(win.min_strut_um)}`,
+    hint: "Lower the porosity, which thickens the load-bearing members"
+          + (isTPMS ? ", or use fewer unit cells so each one is larger."
+                    : ". Fewer layers also help: layer height is tied to filament diameter, "
+                      + "so a shorter stack means a fatter filament.")
+  };
+
+  return { measured: null, hint: null };
+}
+
 function gauge(value, lo, hi, okLo, okHi, ok) {
   const g = el("div", "gauge " + (ok === null ? "" : ok ? "ok" : "no"));
   const band = el("div", "band");
@@ -1358,7 +1453,18 @@ function render(p) {
   if (v.geometry_rejections.length) {
     const r = el("div", "note"); r.append(el("span", "bang", "!"));
     const t = el("div");
-    t.innerHTML = "<b>Geometry rejected:</b> " + esc(v.geometry_rejections.join("; ")) + ".";
+    const win = (META && META.windows) || { pore_um: [200, 600], min_strut_um: 150,
+                                            porosity: [0.5, 0.9] };
+    const parts = ["<b>Geometry rejected before scoring.</b> A scaffold bone cannot grow "
+                   + "into is not a slightly worse scaffold, so this is a filter, not a "
+                   + "penalty - the stiffness and strength above are still real numbers."];
+    v.geometry_rejections.forEach(reason => {
+      const d = rejectionDetail(reason, p.geometry, p.specification, win);
+      parts.push('<div class="why"><span class="lbl">' + esc(reason) + "</span>"
+                 + (d.measured ? "<span>" + d.measured + "</span>" : "")
+                 + (d.hint ? '<span class="fix">' + d.hint + "</span>" : "") + "</div>");
+    });
+    t.innerHTML = parts.join("");
     r.append(t); out.append(r);
   }
 

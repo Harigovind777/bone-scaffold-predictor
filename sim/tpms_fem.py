@@ -13,17 +13,35 @@ The point of this tier is to densely learn the Gibson-Ashby topology parameters
 published scaffolds cluster at a handful of porosities per architecture.
 
 Outputs a tidy CSV consumable by the property-prediction framework.
+
+WHERE THE TIME GOES. Step 3 is the whole cost - at grid 44 the compression solve is
+about 250x the Laplace solve and the morphometry put together, and inside it the
+conjugate-gradient iteration is ~90% of the wall clock. Two changes follow from that and
+are measured in sim/benchmark_solver.py: the stiffness matrix is assembled over the SOLID
+PHASE ONLY rather than meshing void voxels at a token modulus, and a geometry loaded
+along several axes is assembled once, with the later axes warm-started by rotating the
+first solution. Neither is an approximation - the first IS the void_ratio -> 0 limit the
+ersatz phase was approximating, and the second is a starting guess CG checks for itself.
 """
 
 import numpy as np
 from scipy import sparse
-from scipy.sparse.linalg import cg, spilu, LinearOperator
+from scipy.sparse.linalg import cg, LinearOperator
 
 # --------------------------------------------------------------------------
 # TPMS level-set fields
 # --------------------------------------------------------------------------
 
-TOPOLOGIES = ("gyroid", "diamond", "schwarzP", "iwp")
+# The four classical scaffold surfaces, then four less-sampled ones added to widen the
+# architecture axis. Leave-one-architecture-out is the framework's headline protocol and
+# its variance is set by how many architectures there are to hold out - eight topologies
+# x two modes gives sixteen groups where four gave eight, which is the cheapest available
+# improvement to that estimate. All eight are cubic (their level sets are invariant under
+# a cyclic permutation of x, y, z), so E_x = E_z to solver tolerance; tools/selftest.py
+# checks this on every one of them, and it is the sharpest test that the loading-axis
+# generalisation is right.
+TOPOLOGIES = ("gyroid", "diamond", "schwarzP", "iwp",
+              "fischerKochS", "neovius", "lidinoid", "splitP")
 
 
 def tpms_field(kind, n, cells):
@@ -41,6 +59,27 @@ def tpms_field(kind, n, cells):
     if kind == "iwp":
         return (2 * (np.cos(x) * np.cos(y) + np.cos(y) * np.cos(z) + np.cos(z) * np.cos(x))
                 - (np.cos(2 * x) + np.cos(2 * y) + np.cos(2 * z)))
+    if kind == "fischerKochS":
+        return (np.cos(2 * x) * np.sin(y) * np.cos(z)
+                + np.cos(2 * y) * np.sin(z) * np.cos(x)
+                + np.cos(2 * z) * np.sin(x) * np.cos(y))
+    if kind == "neovius":
+        return (3 * (np.cos(x) + np.cos(y) + np.cos(z))
+                + 4 * np.cos(x) * np.cos(y) * np.cos(z))
+    if kind == "lidinoid":
+        return (0.5 * (np.sin(2 * x) * np.cos(y) * np.sin(z)
+                       + np.sin(2 * y) * np.cos(z) * np.sin(x)
+                       + np.sin(2 * z) * np.cos(x) * np.sin(y))
+                - 0.5 * (np.cos(2 * x) * np.cos(2 * y) + np.cos(2 * y) * np.cos(2 * z)
+                         + np.cos(2 * z) * np.cos(2 * x))
+                + 0.15)
+    if kind == "splitP":
+        return (1.1 * (np.sin(2 * x) * np.sin(z) * np.cos(y)
+                       + np.sin(2 * y) * np.sin(x) * np.cos(z)
+                       + np.sin(2 * z) * np.sin(y) * np.cos(x))
+                - 0.2 * (np.cos(2 * x) * np.cos(2 * y) + np.cos(2 * y) * np.cos(2 * z)
+                         + np.cos(2 * z) * np.cos(2 * x))
+                - 0.4 * (np.cos(2 * x) + np.cos(2 * y) + np.cos(2 * z)))
     raise ValueError(f"unknown topology {kind}")
 
 
@@ -219,32 +258,52 @@ def node_ids(n):
 # Uniaxial compression FEM
 # --------------------------------------------------------------------------
 
-def apparent_modulus(mask, Es=1.0, nu=0.3, void_ratio=1e-6, axis=2):
-    """Backwards-compatible wrapper: returns (E_rel, cg_info) only."""
-    r = compression_response(mask, Es, nu, void_ratio, axis)
-    return r["E_rel"], r["cg_info"]
+CG_RTOL = 1e-6
+"""
+Conjugate-gradient tolerance for the compression solve.
+
+Calibrated, not guessed: against a void_ratio -> 0, rtol = 1e-10 reference solve, 1e-6
+reproduces E_rel to all seven printed figures on gyroid (P = 0.70 and 0.85), IWP-sheet
+(P = 0.60) and 0/90 FDM (P = 0.72), while cutting CG iterations by 7-30% depending on
+geometry. E_rel is an energy and converges quadratically, so it is insensitive to this;
+K_sc is a derivative of the displacement field and tracks the tolerance one-for-one,
+reaching 4e-6 here - still two orders below the third decimal the sweep writes it out
+to. sim/benchmark_solver.py reproduces the comparison.
+"""
 
 
-def compression_response(mask, Es=1.0, nu=0.3, void_ratio=1e-6, axis=2):
+def _element_dofs(ids):
+    """(nel, 8) node ids -> (nel, 24) dof ids, in the node order hex8_stiffness assumes."""
+    edof = np.empty((ids.shape[0], 24), dtype=np.int64)
+    edof[:, 0::3] = ids * 3
+    edof[:, 1::3] = ids * 3 + 1
+    edof[:, 2::3] = ids * 3 + 2
+    return edof
+
+
+def assemble_compression(mask, nu=0.3, void_ratio=0.0):
     """
-    Apparent Young's modulus under uniaxial compression along `axis`, normalised by Es.
+    Global stiffness for a voxel mask, independent of which axis will be loaded.
 
-    Symmetry rollers on the x=0, y=0 and z=0 faces; prescribed displacement on the
-    far face of the loading axis. This mirrors a physical platen compression test, so
-    results are directly comparable to published compressive-modulus values (unlike
-    periodic homogenisation). Void voxels carry a tiny ersatz stiffness to keep the
-    system non-singular.
+    Two assembly modes, and the default changed:
 
-    `axis` is 0/1/2 for x/y/z. Loading along more than one axis is how the orthotropy
-    of a 0/90 lay-down is measured: a print is much stiffer across the filaments than
-    along them, and that ratio is a design variable the literature rarely reports.
+    `void_ratio = 0` (default) assembles the SOLID PHASE ONLY. Void voxels are not
+    elements at all and their exclusive nodes carry no equations, so the system is the
+    scaffold skeleton and nothing else.
 
-    Also returns a STRESS CONCENTRATION FACTOR: the 95th-percentile von Mises stress
-    in the solid phase divided by the applied macroscopic stress. Strength then follows
-    as sigma_scaffold ~ sigma_yield_solid / K_sc, which is a defensible first-order
-    strength predictor from a purely linear-elastic solve - no plasticity model needed.
-    A high K_sc means the architecture funnels load through a few sharp junctions and
-    will fail early even if its modulus looks good.
+    `void_ratio > 0` reproduces the older ersatz-stiffness assembly, in which every
+    voxel is an element and void ones are given a token modulus to keep the matrix
+    non-singular. That is a numerical regularisation, and it is not free: the ersatz
+    phase both carries a little load and constrains the solid, and against a
+    void_ratio -> 0 reference it inflates E_rel by 0.003% at P = 0.70 and by 0.04% at
+    P = 0.85 - small, but growing an order of magnitude across the porosity range, i.e.
+    worst exactly where the modulus is smallest and the scaffold literature is densest.
+    It also triples the non-zeros. It is kept only as a fallback for geometries whose
+    solid phase floats free (see `compression_response_axes`) and to reproduce earlier
+    runs.
+
+    Returns everything the per-axis solve needs, so a mask loaded along several axes is
+    assembled once.
     """
     n = mask.shape[0]
     nn = n + 1
@@ -252,18 +311,56 @@ def compression_response(mask, Es=1.0, nu=0.3, void_ratio=1e-6, axis=2):
     h = 1.0 / n
 
     Ke = hex8_stiffness(1.0, nu, h)
-    dens = np.where(mask.ravel(), 1.0, void_ratio)
+    ids_all = node_ids(n)
+    flat = mask.ravel()
 
-    ids = node_ids(n)
-    edof = np.repeat(ids, 3, axis=1) * 0
-    edof[:, 0::3] = ids * 3
-    edof[:, 1::3] = ids * 3 + 1
-    edof[:, 2::3] = ids * 3 + 2
+    if void_ratio > 0:
+        ids = ids_all
+        dens = np.where(flat, 1.0, void_ratio)
+        is_solid = flat
+    else:
+        keep = np.flatnonzero(flat)
+        ids = ids_all[keep]
+        dens = np.ones(keep.size)
+        is_solid = np.ones(keep.size, dtype=bool)
 
-    rows = np.repeat(edof, 24, axis=1).ravel()
-    cols = np.tile(edof, (1, 24)).ravel()
-    vals = (dens[:, None] * Ke.ravel()[None, :]).ravel()
-    K = sparse.coo_matrix((vals, (rows, cols)), shape=(ndof, ndof)).tocsr()
+    edof = _element_dofs(ids)
+    if edof.shape[0] == 0:                     # nothing solid: no system to build
+        K = sparse.csr_matrix((ndof, ndof))
+        active = np.zeros(nn ** 3, dtype=bool)
+    else:
+        rows = np.repeat(edof, 24, axis=1).ravel()
+        cols = np.tile(edof, (1, 24)).ravel()
+        vals = (dens[:, None] * Ke.ravel()[None, :]).ravel()
+        K = sparse.coo_matrix((vals, (rows, cols)), shape=(ndof, ndof)).tocsr()
+        active = np.zeros(nn ** 3, dtype=bool)
+        active[np.unique(ids)] = True
+
+    return dict(K=K, edof=edof, dens=dens, is_solid=is_solid, active=active,
+                n=n, nn=nn, ndof=ndof, h=h, nu=nu)
+
+
+def _cyclic_shift(u, nn):
+    """
+    Turn a displacement field one step around the x -> y -> z -> x rotation.
+
+    If the geometry is invariant under that rotation, the image of the solution for a
+    compression along `axis` IS the solution along (axis + 1) % 3 - not an approximation
+    of it. Both the node grid and the three displacement components have to be permuted
+    together, which is what the transpose and the component reindex do.
+    """
+    U = u.reshape(nn, nn, nn, 3)
+    return np.transpose(U, (2, 0, 1, 3))[..., [2, 0, 1]].ravel()
+
+
+def _is_cyclic(mask):
+    """True if the voxel geometry is unchanged by the x -> y -> z -> x rotation."""
+    return bool((mask.transpose(1, 2, 0) == mask).all())
+
+
+def _solve_axis(sys_, axis, Es=1.0, rtol=CG_RTOL, x0=None):
+    """Uniaxial compression of an assembled system along `axis`. See compression_response."""
+    K, n, nn, ndof = sys_["K"], sys_["n"], sys_["nn"], sys_["ndof"]
 
     grid_idx = np.unravel_index(np.arange(nn ** 3), (nn, nn, nn))
     fixed = np.concatenate([
@@ -277,17 +374,24 @@ def compression_response(mask, Es=1.0, nu=0.3, void_ratio=1e-6, axis=2):
     u[top_dof] = -delta
 
     constrained = np.unique(np.concatenate([fixed, top_dof]))
-    free = np.setdiff1d(np.arange(ndof), constrained)
+    # Only nodes carrying an equation are unknowns. Under solid-only assembly that
+    # excludes every purely-void node, which is where the speed comes from: at P = 0.70
+    # it is a third of the degrees of freedom and a third of the non-zeros.
+    free = np.setdiff1d(np.flatnonzero(np.repeat(sys_["active"], 3)), constrained)
 
-    f = -(K[:, constrained] @ u[constrained])
-    Kff = K[free][:, free]
-
-    # Jacobi-preconditioned CG; the ersatz stiffness keeps Kff well posed
-    diag = Kff.diagonal()
-    diag[diag == 0] = 1.0
-    M = LinearOperator(Kff.shape, matvec=lambda v: v / diag)
-    uf, info = cg(Kff, f[free], rtol=1e-8, maxiter=8000, M=M)
-    u[free] = uf
+    info = 0
+    if free.size:
+        f = -(K[:, constrained] @ u[constrained])
+        Kff = K[free][:, free]
+        diag = Kff.diagonal()
+        diag[diag == 0] = 1.0
+        M = LinearOperator(Kff.shape, matvec=lambda v: v / diag)
+        uf, info = cg(Kff, f[free], x0=(None if x0 is None else x0[free]),
+                      rtol=rtol, maxiter=8000, M=M)
+        if not np.all(np.isfinite(uf)):
+            info = -1
+        else:
+            u[free] = uf
 
     reaction = float((K[top_dof, :] @ u).sum())
     macro_stress = abs(reaction / 1.0)         # unit cross-sectional area
@@ -295,21 +399,96 @@ def compression_response(mask, Es=1.0, nu=0.3, void_ratio=1e-6, axis=2):
     E_rel = macro_stress / strain * Es
 
     # ---- stress recovery at element centroids, for the strength proxy ----
-    D = elasticity_matrix(1.0, nu)
-    B = hex8_B_centroid(h)
-    ue = u[edof]                                # (nel, 24)
-    eps = ue @ B.T                              # (nel, 6)
-    sig = (eps @ D.T) * dens[:, None]           # ersatz-scaled, so void carries ~nothing
-    vm = np.sqrt(0.5 * ((sig[:, 0] - sig[:, 1]) ** 2 + (sig[:, 1] - sig[:, 2]) ** 2
-                        + (sig[:, 2] - sig[:, 0]) ** 2)
-                 + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
-    solid = mask.ravel()
-    if solid.any() and macro_stress > 0:
-        k_sc = float(np.percentile(vm[solid], 95) / macro_stress)
+    edof, dens, is_solid = sys_["edof"], sys_["dens"], sys_["is_solid"]
+    if edof.shape[0] and is_solid.any() and macro_stress > 0:
+        D = elasticity_matrix(1.0, sys_["nu"])
+        B = hex8_B_centroid(sys_["h"])
+        eps = u[edof] @ B.T                     # (nel, 6)
+        sig = (eps @ D.T) * dens[:, None]       # ersatz-scaled, so void carries ~nothing
+        vm = np.sqrt(0.5 * ((sig[:, 0] - sig[:, 1]) ** 2 + (sig[:, 1] - sig[:, 2]) ** 2
+                            + (sig[:, 2] - sig[:, 0]) ** 2)
+                     + 3.0 * (sig[:, 3] ** 2 + sig[:, 4] ** 2 + sig[:, 5] ** 2))
+        k_sc = float(np.percentile(vm[is_solid], 95) / macro_stress)
     else:
         k_sc = np.nan
 
-    return dict(E_rel=E_rel, cg_info=info, stress_concentration=k_sc)
+    return dict(E_rel=E_rel, cg_info=info, stress_concentration=k_sc, u=u)
+
+
+def apparent_modulus(mask, Es=1.0, nu=0.3, void_ratio=0.0, axis=2):
+    """Backwards-compatible wrapper: returns (E_rel, cg_info) only."""
+    r = compression_response(mask, Es, nu, void_ratio, axis)
+    return r["E_rel"], r["cg_info"]
+
+
+def compression_response(mask, Es=1.0, nu=0.3, void_ratio=0.0, axis=2, rtol=CG_RTOL):
+    """
+    Apparent Young's modulus under uniaxial compression along `axis`, normalised by Es.
+
+    Symmetry rollers on the x=0, y=0 and z=0 faces; prescribed displacement on the
+    far face of the loading axis. This mirrors a physical platen compression test, so
+    results are directly comparable to published compressive-modulus values (unlike
+    periodic homogenisation).
+
+    `axis` is 0/1/2 for x/y/z. Loading along more than one axis is how the orthotropy
+    of a 0/90 lay-down is measured: a print is much stiffer across the filaments than
+    along them, and that ratio is a design variable the literature rarely reports. Use
+    `compression_response_axes` when several axes are wanted - it assembles once.
+
+    Also returns a STRESS CONCENTRATION FACTOR: the 95th-percentile von Mises stress
+    in the solid phase divided by the applied macroscopic stress. Strength then follows
+    as sigma_scaffold ~ sigma_yield_solid / K_sc, which is a defensible first-order
+    strength predictor from a purely linear-elastic solve - no plasticity model needed.
+    A high K_sc means the architecture funnels load through a few sharp junctions and
+    will fail early even if its modulus looks good.
+    """
+    return compression_response_axes(mask, (axis,), Es, nu, void_ratio, rtol)[axis]
+
+
+def compression_response_axes(mask, axes=(2,), Es=1.0, nu=0.3, void_ratio=0.0,
+                              rtol=CG_RTOL):
+    """
+    Compression response along several axes from ONE assembly. Returns {axis: result}.
+
+    A cubic geometry gets its later axes almost for nothing. Every TPMS level set here
+    is invariant under the x -> y -> z -> x rotation - on the voxel grid, not merely in
+    the continuum - so rotating the solved displacement field lands exactly on the next
+    axis's solution and CG stops at iteration ZERO, having checked the residual itself.
+    That is the point: it is offered as a starting guess, never asserted, so a geometry
+    that is not actually symmetric (a 0/90 lay-down is not) simply costs what it always
+    did. The invariance is tested per mask rather than inferred from the topology name,
+    which also keeps it honest for a bisection that happened to land off-symmetry.
+
+    Solid-only assembly drops the ersatz void that used to keep the matrix
+    non-singular, so a solid phase that floats free of every boundary condition can
+    leave the system singular. That is rare - it needs an island touching the loaded
+    face and nothing else - but a sweep must not fall over on it, so a non-converged
+    solve is retried on the regularised assembly rather than returned.
+    """
+    sys_ = assemble_compression(mask, nu, void_ratio)
+    cyclic = _is_cyclic(mask)
+    nn = sys_["nn"]
+
+    out, solved = {}, {}
+    for ax in axes:
+        x0 = None
+        first = next(iter(solved.items()), None)
+        if cyclic and first is not None:
+            src, x0 = first
+            for _ in range((ax - src) % 3):
+                x0 = _cyclic_shift(x0, nn)
+        out[ax] = _solve_axis(sys_, ax, Es, rtol, x0=x0)
+        solved[ax] = out[ax]["u"]
+
+    if void_ratio <= 0 and any(r["cg_info"] != 0 for r in out.values()):
+        fallback = assemble_compression(mask, nu, void_ratio=1e-6)
+        for ax, r in out.items():
+            if r["cg_info"] != 0:
+                out[ax] = _solve_axis(fallback, ax, Es, rtol)
+                out[ax]["regularised"] = True
+    for r in out.values():
+        r.pop("u", None)                       # the field itself is not part of the result
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -334,9 +513,13 @@ def effective_diffusivity(mask, axis=2):
     def harm(a, c):
         return 2 * a * c / (a + c)
 
-    for axis in range(3):
-        a_idx = np.take(idx, np.arange(n - 1), axis=axis).ravel()
-        b_idx = np.take(idx, np.arange(1, n), axis=axis).ravel()
+    # `d` deliberately, not `axis`: this loop sums conductances over all three lattice
+    # directions and must not clobber the transport direction the caller asked for.
+    # It used to, so D_eff came back along z whatever `axis` said, and the anisotropy
+    # of a 0/90 lay-down was silently reported as isotropic.
+    for d in range(3):
+        a_idx = np.take(idx, np.arange(n - 1), axis=d).ravel()
+        b_idx = np.take(idx, np.arange(1, n), axis=d).ravel()
         k = harm(sig[a_idx], sig[b_idx])
         rows.extend([a_idx, b_idx, a_idx, b_idx])
         cols.extend([a_idx, b_idx, b_idx, a_idx])

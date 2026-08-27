@@ -32,15 +32,17 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tpms_fem import (build_at_porosity, fdm_lattice, compression_response,
+from tpms_fem import (TOPOLOGIES, build_at_porosity, fdm_lattice, compression_response_axes,
                       effective_diffusivity, specific_surface, morphometry)
 
 GRIDS = (16, 20, 24, 32, 44)
 DOMAIN_MM = 2.0
 
+# Every topology the production sweep uses, so the mesh-convergence claim covers the
+# whole simulated tier rather than the half of it that existed when this was written.
 TPMS_CASES = [(t, m, c, p)
               for t, m, c, p in itertools.product(
-                  ("gyroid", "diamond", "schwarzP", "iwp"), ("network", "sheet"),
+                  TOPOLOGIES, ("network", "sheet"),
                   (1, 2), (0.40, 0.60, 0.75))]
 
 # Strut/layer combinations drawn from the production sweep's range. Note these do NOT all
@@ -78,8 +80,8 @@ def evaluate_case(spec):
         P_actual = 1.0 - float(mask.mean())
         if mask.sum() < 30 or not (0.05 < P_actual < 0.97):
             return None
-        rz = compression_response(mask, axis=2)
-        rx = compression_response(mask, axis=0)
+        r = compression_response_axes(mask, (2, 0))     # one assembly, both axes
+        rz, rx = r[2], r[0]
         d_z = effective_diffusivity(mask, axis=2)
         return dict(case=key, grid=grid, porosity=round(P_actual, 4),
                     relative_density=round(1 - P_actual, 4),
@@ -113,13 +115,24 @@ def main():
     print(f"\nwrote data/mesh_convergence.csv  {df.shape}  in {time.time()-t0:.0f}s")
 
     # ---- convergence: deviation of each grid from the finest available for that case ----
+    # Cases whose solid phase does not span the specimen at the FINEST grid are excluded:
+    # their reference modulus is exactly zero (the compression solve meshes the solid phase
+    # only, so a structure touching no loaded face carries no load), and a deviation
+    # relative to zero is undefined rather than infinite. The threshold matches
+    # pipeline.config.DEAD_MODULUS.
     finest = df.sort_values("grid").groupby("case").last()
     dev = df.join(finest[["E_rel_z"]].rename(columns={"E_rel_z": "E_ref"}), on="case")
+    n_all = dev.case.nunique()
+    dev = dev[dev.E_ref > 1e-4]
+    n_dropped = n_all - dev.case.nunique()
     dev["pct_err"] = 100 * (dev.E_rel_z - dev.E_ref).abs() / dev.E_ref
     summary = dev.groupby(["family", "grid"])["pct_err"].agg(
         median="median", p90=lambda s: s.quantile(0.90), worst="max").round(2)
     print("\nModulus deviation from the finest grid, % (per family):")
     print(summary.to_string())
+    if n_dropped:
+        print(f"({n_dropped} of {n_all} cases excluded: the solid phase does not span the "
+              f"specimen at grid {max(GRIDS)}, so there is no reference modulus to deviate from)")
 
     # Pairing needs a case at the finest grid AND at some coarser one - not at EVERY grid,
     # which no FDM case manages (see the note on FDM_CASES).

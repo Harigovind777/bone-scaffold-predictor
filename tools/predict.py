@@ -300,9 +300,16 @@ def predict(topology="gyroid", mode="network", porosity=0.65, polymer="PLGA_85_1
 
     return dict(
         trajectory=trajectory,
+        # The integers that define the architecture belong in the specification, not only
+        # encoded inside provenance.config. A caller reconstructing this prediction - the
+        # web UI explaining a rejection, or a bookmarked URL being re-run - needs the cell
+        # or strut count as a number, and parsing it back out of "TPMS|gyroid|network|c2"
+        # is a format dependency nothing should take on.
         specification=dict(family=family, topology=topology, mode=mode,
                            porosity=round(arch["porosity"], 4), polymer=polymer,
-                           ceramic=ceramic, ceramic_wt=ceramic_wt, site=site),
+                           ceramic=ceramic, ceramic_wt=ceramic_wt, site=site,
+                           **(dict(n_cells=int(n_cells)) if family == "TPMS"
+                              else dict(n_struts=int(n_struts), n_layers=int(n_layers)))),
         geometry={k: (round(v, 2) if isinstance(v, float) else v)
                   for k, v in arch.items()
                   if k not in ("E_rel_measured", "ga_n", "ga_C")},
@@ -382,7 +389,9 @@ def main():
                "--mode network \\\n      --porosity 0.68 --polymer PLGA_85_15 "
                "--ceramic beta_TCP --wt 0.30")
     ap.add_argument("--topology", default="gyroid",
-                    help="gyroid|diamond|schwarzP|iwp, or fdm for a printed lattice")
+                    help="any of sim.tpms_fem.TOPOLOGIES (gyroid, diamond, schwarzP, iwp, "
+                         "fischerKochS, neovius, lidinoid, splitP), or fdm for a "
+                         "printed lattice")
     ap.add_argument("--mode", default="network",
                     help="TPMS: network|sheet · FDM: aligned|staggered")
     ap.add_argument("--porosity", type=float, default=0.65)
