@@ -68,7 +68,7 @@ Every sample additionally carries a **second loading axis** (hence an anisotropy
 **stress-concentration factor** as a strength proxy, and µCT-comparable pore size and strut
 thickness from a distance transform rather than a nominal unit-cell figure.
 
-**Validation:** `tools/selftest.py` — 23 checks, all passing. Solid block returns E/Es = 1 on every
+**Validation:** `tools/selftest.py` — 26 checks, all passing. Solid block returns E/Es = 1 on every
 axis; fully open box transports at D_eff/D_bulk = 1; cubic TPMS is elastically isotropic and a 0/90
 print is not. 1891 of 1896 CG solves converged; the five that did not are all the same
 Fischer–Koch S sheet cell at P = 0.88, whose largest connected solid cluster holds 0.2% of its own

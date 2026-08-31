@@ -1,6 +1,10 @@
 """Paths, seeds and the feature contracts every stage agrees on."""
 
+import json
+import math
 from pathlib import Path
+
+import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -59,3 +63,40 @@ POROSITY_WINDOW = (0.50, 0.90)
 # the solid phase does not span the specimen. Two orders of magnitude above the
 # void_ratio floor of 1e-6, so it separates cleanly without catching real soft samples.
 DEAD_MODULUS = 1e-4
+
+
+# --------------------------------------------------------------------------
+# JSON output
+#
+# Python writes float('nan') as the bare token NaN. That is a Python extension and
+# not JSON: RFC 8259 has no non-finite literals, so JSON.parse - the parser the web
+# interface actually uses - rejects the whole document rather than the one field.
+# One scaffold whose polymer outlasts the horizon therefore used to take down the
+# entire response, and results/metrics.json shipped unparseable by anything but
+# Python.
+#
+# Every non-finite here is a legitimate "not applicable" - a polymer that never
+# resorbs, a correlation between fidelities that a single-fidelity model does not
+# have - and JSON spells that null. The frontend already reads it that way: fmt()
+# renders null as an em dash and the resorption line as "not resorbed within 52
+# weeks". So map non-finite to None on the way out, and pass allow_nan=False so
+# anything that escapes this is a loud error rather than a file nobody can read.
+# --------------------------------------------------------------------------
+
+def json_safe(obj):
+    """Recursively replace non-finite floats with None, so obj can be written as JSON."""
+    if isinstance(obj, float):                    # np.float64 subclasses float
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, np.floating):              # np.float32 and friends do not
+        f = float(obj)
+        return f if math.isfinite(f) else None
+    return obj
+
+
+def dump_json(obj, **kw):
+    """json.dumps with this project's conventions: null for non-finite, never NaN."""
+    return json.dumps(json_safe(obj), allow_nan=False, default=str, **kw)

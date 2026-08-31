@@ -126,7 +126,7 @@ at and it says so loudly rather than returning a confident number.
 | `webapp/server.py` | **The web interface** — stdlib HTTP server over the same code paths |
 | `webapp/index.html` | Single-page UI: predict, results dashboard, live pipeline runner |
 | `tools/predict.py` | **The prediction interface** — one scaffold spec → properties, trajectory, verdict, provenance |
-| `tools/selftest.py` | 23 physics and pipeline-contract checks |
+| `tools/selftest.py` | 26 physics, pipeline-contract and JSON-output checks |
 | `tools/validate_curation.py` | Gate for Tier 3 curation sheets |
 | `results/` | Everything the pipeline produces — `README.md`, `metrics.json`, `figures/`, `tables/` |
 

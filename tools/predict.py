@@ -36,7 +36,6 @@ the global fit at a point where the true answer is already known.
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -421,7 +420,7 @@ def main():
     except (KeyError, ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(p, indent=2, default=str) if a.json else _render(p))
+    print(C.dump_json(p, indent=2) if a.json else _render(p))
     return 0 if p["verdict"]["feasible"] else 1
 
 

@@ -10,6 +10,7 @@ than as a plausible-looking number in a results table.
 Small grids throughout - this is a correctness check, not a benchmark. Runs in ~30 s.
 """
 
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -336,6 +337,64 @@ def _():
     else:
         raise AssertionError("porosity 0.95 is unreachable for s3/l12 and must be refused")
 
+
+# --------------------------------------------------------------------------
+# JSON output contract
+#
+# Python's json writes float('nan') as the bare token NaN. That is a Python
+# extension, not JSON - RFC 8259 has no non-finite literals - and JSON.parse, the
+# parser the web interface actually uses, rejects the whole document. So a single
+# unresorbed polymer used to take the entire response down. These pin the contract
+# at the boundary where it is easy to lose again.
+# --------------------------------------------------------------------------
+
+def _strict(raw):
+    """Parse exactly as a browser's JSON.parse does: NaN and Infinity are errors."""
+    def boom(tok):
+        raise AssertionError(f"emitted the non-JSON token {tok!r}")
+    return json.loads(raw, parse_constant=boom)
+
+
+@check("non-finite floats serialise as null, not the NaN token")
+def _():
+    from pipeline import config as C
+
+    payload = dict(a=float("nan"), b=float("inf"), c=float("-inf"), d=1.5,
+                   nested=[float("nan"), dict(deep=float("nan"))])
+    got = _strict(C.dump_json(payload))
+
+    assert got["a"] is None, got["a"]
+    assert got["b"] is None and got["c"] is None, (got["b"], got["c"])
+    assert got["d"] == 1.5, got["d"]                       # finite values untouched
+    assert got["nested"][0] is None, got["nested"]
+    assert got["nested"][1]["deep"] is None, got["nested"]
+
+
+@check("a polymer that never resorbs still serialises as strict JSON")
+def _():
+    # chitosan does not fall below 10% mass inside the 52-week horizon, so
+    # polymer_resorbed_week is NaN. That is a real answer - "never" - and JSON
+    # spells it null, which the frontend already renders as "not resorbed".
+    from tools.predict import predict
+    from pipeline import config as C
+
+    p = predict(topology="iwp", mode="network", porosity=0.51, polymer="chitosan",
+                ceramic="bioglass", ceramic_wt=0.30, site="trabecular_high", n_cells=2)
+    assert not np.isfinite(p["degradation"]["polymer_resorbed_week"]), \
+        "chitosan was expected to outlast the horizon - pick another polymer here"
+
+    got = _strict(C.dump_json(p))
+    assert got["degradation"]["polymer_resorbed_week"] is None
+
+
+@check("results/metrics.json on disk is JSON anything can parse")
+def _():
+    from pipeline import config as C
+
+    path = C.RESULTS / "metrics.json"
+    if not path.exists():
+        return                                  # nothing built yet; nothing to check
+    _strict(path.read_text())
 
 def main():
     passed = failed = 0

@@ -111,8 +111,8 @@
     },
     {
       "feature": "pore_size_um",
-      "importance": 0.01416297988835662,
-      "std": 0.0015877249465678113
+      "importance": 0.014162979888356598,
+      "std": 0.0015877249465678098
     },
     {
       "feature": "mode_sheet",
@@ -183,7 +183,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -193,10 +193,10 @@
         "r2": -0.9024,
         "rmse": 0.7992,
         "mae": 0.6707,
-        "spearman": NaN,
+        "spearman": null,
         "r2_linear": -0.4967,
         "median_fold_error": 1.829,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -222,7 +222,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -235,7 +235,7 @@
         "spearman": 0.7256,
         "r2_linear": 0.1684,
         "median_fold_error": 1.4294,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -261,7 +261,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -274,7 +274,7 @@
         "spearman": 0.7801,
         "r2_linear": 0.214,
         "median_fold_error": 1.4811,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -300,7 +300,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -313,7 +313,7 @@
         "spearman": 0.8287,
         "r2_linear": 0.5388,
         "median_fold_error": 1.3667,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -339,7 +339,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -352,7 +352,7 @@
         "spearman": 0.8315,
         "r2_linear": 0.6794,
         "median_fold_error": 1.2637,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -378,7 +378,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -391,7 +391,7 @@
         "spearman": 0.8617,
         "r2_linear": 0.7358,
         "median_fold_error": 1.2488,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -417,7 +417,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -430,7 +430,7 @@
         "spearman": 0.9086,
         "r2_linear": 0.8143,
         "median_fold_error": 1.2332,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -456,7 +456,7 @@
         "spearman": 0.915,
         "r2_linear": 0.844,
         "median_fold_error": 1.2076,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "high_only",
@@ -469,7 +469,7 @@
         "spearman": 0.9114,
         "r2_linear": 0.8623,
         "median_fold_error": 1.1935,
-        "rho": NaN
+        "rho": null
       },
       {
         "model": "fused",
@@ -820,7 +820,7 @@
           "sigma0_MPa": 20.175508038810502,
           "E_12wk_pct": 80.87218959234872,
           "mass_12wk_pct": 99.95287803446399,
-          "polymer_resorbed_week": NaN,
+          "polymer_resorbed_week": null,
           "min_pH": 7.2770828052918315,
           "porosity_final": 0.5174132264488409,
           "load_transfer_cost": 0.0812612651046777,
@@ -851,7 +851,7 @@
           "sigma0_MPa": 20.175508038810502,
           "E_12wk_pct": 80.87218959234872,
           "mass_12wk_pct": 99.95287803446399,
-          "polymer_resorbed_week": NaN,
+          "polymer_resorbed_week": null,
           "min_pH": 7.2770828052918315,
           "porosity_final": 0.5174132264488409,
           "load_transfer_cost": 0.0812612651046777,
@@ -882,7 +882,7 @@
           "sigma0_MPa": 18.588773981803,
           "E_12wk_pct": 80.86571543549266,
           "mass_12wk_pct": 99.95287803446399,
-          "polymer_resorbed_week": NaN,
+          "polymer_resorbed_week": null,
           "min_pH": 7.2770828052918315,
           "porosity_final": 0.5188839297408496,
           "load_transfer_cost": 0.08418138137960172,
@@ -913,7 +913,7 @@
           "sigma0_MPa": 18.578724584404654,
           "E_12wk_pct": 90.2381128120704,
           "mass_12wk_pct": 99.96715855589477,
-          "polymer_resorbed_week": NaN,
+          "polymer_resorbed_week": null,
           "min_pH": 6.73410882401011,
           "porosity_final": 0.5041017552579456,
           "load_transfer_cost": 0.08424023150581653,
@@ -944,7 +944,7 @@
           "sigma0_MPa": 17.406236100802708,
           "E_12wk_pct": 90.24784304445767,
           "mass_12wk_pct": 99.9672003814096,
-          "polymer_resorbed_week": NaN,
+          "polymer_resorbed_week": null,
           "min_pH": 6.743352491362101,
           "porosity_final": 0.515656464350167,
           "load_transfer_cost": 0.08489816856528468,

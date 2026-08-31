@@ -148,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- helpers ------------------------------------------------------------
     def _send(self, code, payload, ctype="application/json", raw=False):
-        data = payload if raw else json.dumps(payload, default=str).encode()
+        data = payload if raw else C.dump_json(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))

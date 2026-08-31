@@ -16,7 +16,6 @@ Stages whose inputs are missing report themselves as skipped rather than failing
 the pipeline runs today on simulation alone and strengthens as curated data arrives.
 """
 
-import json
 import sys
 import time
 import warnings
@@ -336,7 +335,7 @@ def stage_figures(sim, ladder, leak_panel, conv, mf, best_cand):
 
 def write_summary():
     C.RESULTS.mkdir(parents=True, exist_ok=True)
-    (C.RESULTS / "metrics.json").write_text(json.dumps(RESULTS, indent=2, default=str))
+    (C.RESULTS / "metrics.json").write_text(C.dump_json(RESULTS, indent=2))
 
     ds, lad = RESULTS["dataset"], pd.DataFrame(RESULTS["model_ladder"])
     lad = lad.dropna(subset=["r2"])          # a model that failed to score is not "best"
