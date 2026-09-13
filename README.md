@@ -25,7 +25,7 @@ co-kriging rather than pooled.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install numpy pandas scikit-learn scipy matplotlib openpyxl
+.venv/bin/pip install -r requirements.txt     # pinned: the versions behind results/
 
 .venv/bin/python sim/generate_all.py     # Tier 2+2b, parallel   (~41 min, or --quick for ~25 s)
 .venv/bin/python sim/convergence.py      # mesh ladder + fidelity pairs
@@ -170,6 +170,11 @@ so nobody spends that week twice.
 ---
 
 ## Improving accuracy: what worked and what did not
+
+**Published report: https://harigovind777.github.io/bone-scaffold-predictor/** — rebuilt by
+`.github/workflows/accuracy.yml` on every push, which reruns the self-tests, the accuracy
+ledger and the full pipeline on GitHub's servers and publishes the page from that run's
+results. The run log is linked from the page footer.
 
 **The full write-up is [`ACCURACY.md`](ACCURACY.md)** — the seven rules, every change with
 its reasoning, and the graveyard of variants that were measured and dropped.

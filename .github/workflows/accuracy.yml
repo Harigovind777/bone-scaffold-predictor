@@ -1,0 +1,115 @@
+# Recompute every accuracy number on GitHub's servers and republish the report.
+#
+# Three jobs, so a reader can see each claim checked separately:
+#   tests   - the 26 physics, pipeline-contract and JSON checks; nothing publishes if these fail
+#   ledger  - every headline model re-measured against the frozen pre-work baseline
+#   report  - the full pipeline from committed data, then the static report built from
+#             ITS results (not the committed ones) and pushed to the gh-pages branch
+#
+# The numbers on the published page therefore come from this run, and the page footer
+# links back to the run log.
+
+name: Accuracy check and report
+
+on:
+  push:
+    branches: [master, accuracy-framework]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # the report job pushes the built site to gh-pages
+
+concurrency:
+  group: accuracy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Self-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Run self-tests
+        run: python -u tools/selftest.py
+
+  ledger:
+    name: Accuracy ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Re-measure every model against the frozen baseline
+        run: |
+          set -o pipefail
+          python -u tools/accuracy_ledger.py | tee ledger.txt
+      - name: Show the ledger on the run page
+        if: always()
+        run: |
+          {
+            echo "## Accuracy ledger"
+            echo
+            echo "Every headline model re-measured on GitHub's servers against \`results/accuracy_baseline.json\`."
+            echo
+            echo '```'
+            cat ledger.txt 2>/dev/null || echo "(ledger did not produce output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report:
+    name: Pipeline and published report
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Run the full pipeline from committed data
+        run: python -u run_pipeline.py
+      - name: Build the report from this run's results
+        run: |
+          python tools/build_site.py \
+            --repo-url "${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: Keep the run's results as a downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ github.sha }}
+          path: |
+            results/metrics.json
+            results/README.md
+            results/figures/
+            site/
+      - name: Publish to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Accuracy report from ${GITHUB_SHA::7} (run ${GITHUB_RUN_ID})"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          {
+            echo "## Published report"
+            echo
+            echo "https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/"
+          } >> "$GITHUB_STEP_SUMMARY"

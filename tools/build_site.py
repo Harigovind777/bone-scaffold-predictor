@@ -3,6 +3,7 @@ Build the shareable accuracy report as a static site - one HTML page plus its fi
 
     .venv/bin/python tools/build_site.py                  # -> site/
     .venv/bin/python tools/build_site.py --repo-url URL   # add a link to the source
+    .venv/bin/python tools/build_site.py --run-url URL    # add a link to the CI run that computed it
 
 Every number on the page is read from files the pipeline and the ledger produce -
 `results/metrics.json` for where the models stand now, `results/accuracy_baseline.json`
@@ -409,7 +410,7 @@ def git(*args):
         return ""
 
 
-def build(repo_url=None):
+def build(repo_url=None, run_url=None):
     groups = load_numbers()
     now = json.loads((RESULTS / "metrics.json").read_text())
     ladder = {r["model"]: r["r2"] for r in now["model_ladder"]}
@@ -429,6 +430,12 @@ def build(repo_url=None):
     source = (f'<p>The code behind every number: <a href="{html.escape(repo_url)}">'
               f'the repository at this commit</a>.</p>' if repo_url else "")
     state = " with uncommitted changes" if dirty else ""
+    # Where the numbers were computed. On GitHub Actions that is a public run log anyone
+    # can open, which is the difference between "the author says so" and "go and look".
+    where = (f'<p>These numbers were recomputed from scratch on GitHub\'s servers: '
+             f'<a href="{html.escape(run_url)}">open the run log</a> to see the self-tests, '
+             f'the accuracy ledger and the pipeline output that produced this page.</p>'
+             if run_url else "")
 
     page = f"""<!doctype html>
 <html lang="en">
@@ -456,6 +463,7 @@ def build(repo_url=None):
   <footer>
     <p>Every number on this page is generated from the pipeline's own output files by
     <code>tools/build_site.py</code>, built from commit <code>{commit}</code>{state} on {built}.</p>
+    {where}
     {source}
   </footer>
 </main>
@@ -477,8 +485,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo-url", help="link to the source repository in the footer")
+    ap.add_argument("--run-url", help="link to the CI run whose results the page shows")
     args = ap.parse_args()
-    print(f"wrote {build(args.repo_url).relative_to(ROOT)}")
+    print(f"wrote {build(args.repo_url, args.run_url).relative_to(ROOT)}")
     return 0
 
 
