@@ -426,8 +426,8 @@ def build(repo_url=None):
     commit = git("rev-parse", "--short", "HEAD") or "unknown"
     dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
     built = dt.date.today().strftime("%-d %B %Y")
-    source = (f'<p>Source code: <a href="{html.escape(repo_url)}">{html.escape(repo_url)}</a></p>'
-              if repo_url else "")
+    source = (f'<p>The code behind every number: <a href="{html.escape(repo_url)}">'
+              f'the repository at this commit</a>.</p>' if repo_url else "")
     state = " with uncommitted changes" if dirty else ""
 
     page = f"""<!doctype html>
