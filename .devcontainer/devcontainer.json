@@ -1,0 +1,26 @@
+// Runs the interactive web app on a GitHub Codespace.
+//
+// Create:  gh codespace create -R Harigovind777/bone-scaffold-predictor -b <branch>
+// Share:   gh codespace ports visibility 8000:public -c <codespace-name>
+//
+// Python 3.14 and requirements.txt match the versions behind results/, so the app shows
+// the same numbers here as on the machine that produced them.
+{
+  "name": "Bone scaffold predictor",
+  "image": "mcr.microsoft.com/devcontainers/python:3.14-bookworm",
+  "features": {
+    // `gh codespace ssh` needs an SSH server to check on the app from a terminal
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  // Started on every boot, not just the first, so a codespace woken from sleep serves
+  // the app again without anyone opening a terminal. Log: /tmp/scaffold-app.log
+  "postStartCommand": "nohup python -u webapp/server.py 8000 > /tmp/scaffold-app.log 2>&1 &",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Scaffold app", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}
