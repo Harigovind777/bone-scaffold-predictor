@@ -231,7 +231,10 @@ instead of a coin flip between two labels the metric treats as equally far apart
 | classifier argmax | 0.587 | 0.144 | 0.645 | 0.278 |
 | expected level Σk·pₖ | **0.593** | **0.375** | **0.604** | **0.546** |
 
-Strictly better on every measure at once, accuracy included. Quadratic-weighted kappa is
+Strictly better on every measure at once, accuracy included. (Recomputed on GitHub's
+Linux servers the expected-level row comes out at 0.592 accuracy and 0.373 QWK: random
+forests move in the third decimal between operating systems. The stiffness ladder and
+the fusion results reproduce there to four decimals.) Quadratic-weighted kappa is
 reported alongside accuracy from here on, because it is the one metric answering "3" to
 everything cannot win: it scores exactly 0.
 
