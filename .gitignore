@@ -10,3 +10,6 @@ __pycache__/
 
 # Machine-local Claude Code settings
 .claude/settings.local.json
+
+# Built static report - deployed, not versioned (tools/build_site.py)
+site/

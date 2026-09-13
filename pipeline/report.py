@@ -187,8 +187,10 @@ def fig_model_ladder(ladder_df, leakage=None):
         # that merely matches "always guess the majority class" has learned nothing.
         if leakage.get("baseline") is not None:
             ax.axhline(leakage["baseline"], ls="--", lw=1.3, color=MUTED)
-            ax.text(-0.42, leakage["baseline"] + 0.018, "majority-class baseline",
-                    fontsize=8.5, color=MUTED, va="bottom", ha="left")
+            # Centred in the gap between the two bars: pinned to the left edge it sat on
+            # top of the y-axis tick label it was meant to be read against.
+            ax.text(0.5, leakage["baseline"] + 0.018, "majority-class\nbaseline",
+                    fontsize=8.5, color=MUTED, va="bottom", ha="center", linespacing=1.1)
         ax.text(0.5, max(vals) * 1.14, f"random split inflates by +{vals[0]-vals[1]:.3f}",
                 ha="center", va="center", fontsize=9.5, color=INK2, fontweight="bold")
         ax.set_ylabel(leakage["metric"])
