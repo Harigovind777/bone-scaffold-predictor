@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bone scaffold predictor accuracy</title>
+<meta name="description" content="How accurate the bone scaffold property predictor is, what was changed to improve it, and how each number was measured.">
+<style>
+:root{
+  color-scheme: light;
+  --ground:#E8EBE9; --surface:#FAFBFA; --surface-2:#F1F3F1;
+  --line:#D2D7D3; --line-strong:#B7BFB9;
+  --ink:#15181A; --ink-2:#39413E; --muted:#5C6663;
+  --accent:#5B44CC;
+  --was:#8F79E6; --now:#3F2A9E; --ref:#8B9591;
+  --display:"Avenir Next Condensed","Avenir Next","Segoe UI","Arial Narrow",system-ui,sans-serif;
+  --sans:"Avenir Next","Avenir","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --prose:Charter,"Bitstream Charter","Iowan Old Style",Palatino,Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--ground)}
+body{margin:0;background:var(--ground);color:var(--ink);font:17px/1.62 var(--prose);
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-underline-offset:.18em}
+a:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.page{max-width:1040px;margin:0 auto;padding:56px 28px 80px}
+header.masthead{max-width:44rem;margin-bottom:40px}
+.project{font:600 15px/1.3 var(--sans);color:var(--muted);margin:0 0 14px}
+h1{font:700 clamp(38px,6vw,64px)/1.02 var(--display);letter-spacing:-.01em;margin:0 0 18px}
+.lede{font-size:19px;color:var(--ink-2);margin:0}
+
+.ledger{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  margin:0 0 64px;padding:28px 32px 20px;position:relative}
+.ledger-head{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:baseline;
+  justify-content:space-between;margin-bottom:8px}
+.ledger h2{font:700 28px/1.1 var(--display);margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;list-style:none;margin:0;padding:0;
+  font:500 14px/1.4 var(--sans);color:var(--ink-2)}
+.legend li{display:flex;align-items:center;gap:8px}
+.key{display:inline-block;width:10px;height:10px;border-radius:50%}
+.key-was{border:2.5px solid var(--was);background:var(--surface)}
+.key-now{background:var(--now)}
+.key-ref{width:2px;height:14px;border-radius:1px;background:var(--ref)}
+
+.group{padding-top:22px}
+.group + .group{border-top:1px solid var(--line);margin-top:6px}
+.group-name{font:600 16px/1.3 var(--sans);color:var(--ink);margin:0 0 6px}
+.group-note{font:400 14px/1.5 var(--sans);color:var(--muted);margin:6px 0 14px;max-width:62ch}
+.row{display:grid;grid-template-columns:minmax(170px,230px) 1fr 132px;gap:0 24px;
+  align-items:center;min-height:46px;cursor:default}
+.row-label{display:flex;flex-direction:column;line-height:1.25}
+.row-name{font:500 15px/1.3 var(--sans)}
+.row-measure{font:400 13px/1.3 var(--sans);color:var(--muted)}
+.row-values{display:flex;justify-content:flex-end;gap:14px;font:14px/1 var(--sans);
+  font-variant-numeric:tabular-nums}
+.v-was{color:var(--muted)}
+.v-now{color:var(--ink);font-weight:700}
+.track{position:relative;height:30px}
+.grid{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.ref{position:absolute;top:4px;bottom:4px;width:2px;margin-left:-1px;border-radius:1px;background:var(--ref)}
+.bar{position:absolute;top:50%;height:2px;margin-top:-1px;background:var(--line-strong)}
+.dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--surface)}
+.dot.was{background:var(--surface);border:2.5px solid var(--was)}
+.dot.now{background:var(--now)}
+.row:hover .dot.now,.row:focus-visible .dot.now{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--was)}
+.axis{display:grid;grid-template-columns:minmax(170px,230px) 1fr 132px;gap:0 24px;margin-top:4px}
+.axis-track{position:relative;height:20px;font:12px/1 var(--sans);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.axis-track span{position:absolute;top:4px;transform:translateX(-50%)}
+.tip{position:absolute;z-index:2;max-width:300px;padding:9px 12px;border-radius:8px;
+  background:var(--ink);color:#fff;font:14px/1.45 var(--sans);pointer-events:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.writeup{max-width:44rem}
+.writeup h2{font:700 34px/1.1 var(--display);margin:64px 0 16px}
+.writeup h3{font:600 21px/1.3 var(--sans);margin:40px 0 10px}
+.writeup p{margin:0 0 18px}
+.writeup hr{border:0;margin:0}
+.writeup ol{padding-left:1.3em}
+.writeup li{margin-bottom:8px}
+.writeup code{font:.84em/1 var(--mono);background:var(--surface-2);padding:.12em .36em;border-radius:4px}
+pre.code{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:14px 18px;overflow-x:auto;font:14px/1.6 var(--mono);margin:0 0 22px}
+pre.code code{background:none;padding:0;font:inherit}
+.table-wrap{overflow-x:auto;margin:6px 0 24px}
+.table-wrap,pre.code,figure.plot{width:min(960px, calc(100vw - 56px))}
+table{border-collapse:collapse;width:100%;font:14.5px/1.45 var(--sans)}
+th{font-weight:600;text-align:left;border-bottom:1.5px solid var(--line-strong);padding:8px 14px 8px 0}
+td{border-bottom:1px solid var(--line);padding:8px 14px 8px 0;vertical-align:top}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table code{font-size:.9em}
+figure.plot{margin:8px 0 34px}
+figure.plot img{display:block;width:100%;height:auto;background:#fcfcfb;border:1px solid var(--line);
+  border-radius:10px}
+figure.plot figcaption{font:14px/1.5 var(--sans);color:var(--muted);margin-top:10px;max-width:62ch}
+footer{margin-top:72px;padding-top:22px;border-top:1px solid var(--line-strong);
+  font:14px/1.6 var(--sans);color:var(--muted);max-width:44rem}
+footer p{margin:0 0 8px}
+
+@media (max-width:720px){
+  .page{padding:36px 18px 64px}
+  .table-wrap,pre.code,figure.plot{width:calc(100vw - 36px)}
+  .ledger{padding:22px 18px 16px}
+  .row,.axis{grid-template-columns:1fr 104px;gap:4px 12px}
+  .row-label{grid-column:1 / -1;flex-direction:row;gap:8px;align-items:baseline;margin-top:8px}
+  .axis > div:first-child{display:none}
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="masthead">
+    <p class="project">Bone scaffold property prediction and inverse design</p>
+    <h1>How accurate are the models, and how do we know?</h1>
+    <p class="lede">Three models predict how a biopolymer bone scaffold will behave: how
+    stiff it is, whether its ink will print, and how far cheap simulations can stand in for
+    expensive ones. Each was scored on data it never trained on, before and after a round
+    of accuracy work. Hover over a row, or tab to it, for its exact change.</p>
+  </header>
+  
+  <figure class="ledger" aria-labelledby="ledger-title">
+    <div class="ledger-head">
+      <h2 id="ledger-title">Before and after</h2>
+      <ul class="legend">
+        <li><span class="key key-was"></span>before this work</li>
+        <li><span class="key key-now"></span>now</li>
+        <li><span class="key key-ref"></span>what a trivial answer scores</li>
+      </ul>
+    </div>
+    
+    <section class="group">
+      <h3 class="group-name">Stiffness of topologies the model never saw</h3>
+      
+      <div class="row" tabindex="0" data-tip="Physics-informed model, R²: 0.647 before, 0.800 now (+0.153). Textbook power law scores 0.783.">
+        <div class="row-label"><span class="row-name">Physics-informed model</span>
+          <span class="row-measure">R²</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:78.28%"></span>
+          <span class="bar" style="left:64.67%;width:calc(79.96% - 64.67%)"></span>
+          <span class="dot was" style="left:64.67%"></span>
+          <span class="dot now" style="left:79.96%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.647</span>
+          <span class="v-now">0.800</span></div>
+        <p class="sr-only">Physics-informed model, R²: 0.647 before, 0.800 now (+0.153). Textbook power law scores 0.783.</p>
+      </div>
+      <div class="row" tabindex="0" data-tip="Best power law, R²: 0.783 before, 0.800 now (+0.017). Textbook power law scores 0.783.">
+        <div class="row-label"><span class="row-name">Best power law</span>
+          <span class="row-measure">R²</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:78.28%"></span>
+          <span class="bar" style="left:78.28%;width:calc(79.96% - 78.28%)"></span>
+          <span class="dot was" style="left:78.28%"></span>
+          <span class="dot now" style="left:79.96%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.783</span>
+          <span class="v-now">0.800</span></div>
+        <p class="sr-only">Best power law, R²: 0.783 before, 0.800 now (+0.017). Textbook power law scores 0.783.</p>
+      </div>
+      <p class="group-note">Each model is scored on a scaffold shape held out of training entirely.</p>
+    </section>
+    <section class="group">
+      <h3 class="group-name">Fusing coarse and fine simulations</h3>
+      
+      <div class="row" tabindex="0" data-tip="Fusion, 4 trusted points, R²: 0.269 before, 0.819 now (+0.549). Coarse mesh alone scores 0.818.">
+        <div class="row-label"><span class="row-name">Fusion, 4 trusted points</span>
+          <span class="row-measure">R²</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:81.84%"></span>
+          <span class="bar" style="left:26.92%;width:calc(81.87% - 26.92%)"></span>
+          <span class="dot was" style="left:26.92%"></span>
+          <span class="dot now" style="left:81.87%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.269</span>
+          <span class="v-now">0.819</span></div>
+        <p class="sr-only">Fusion, 4 trusted points, R²: 0.269 before, 0.819 now (+0.549). Coarse mesh alone scores 0.818.</p>
+      </div>
+      <div class="row" tabindex="0" data-tip="Fusion, 64 trusted points, R²: 0.768 before, 0.821 now (+0.053). Coarse mesh alone scores 0.818.">
+        <div class="row-label"><span class="row-name">Fusion, 64 trusted points</span>
+          <span class="row-measure">R²</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:81.84%"></span>
+          <span class="bar" style="left:76.82%;width:calc(82.08% - 76.82%)"></span>
+          <span class="dot was" style="left:76.82%"></span>
+          <span class="dot now" style="left:82.08%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.768</span>
+          <span class="v-now">0.821</span></div>
+        <p class="sr-only">Fusion, 64 trusted points, R²: 0.768 before, 0.821 now (+0.053). Coarse mesh alone scores 0.818.</p>
+      </div>
+      <p class="group-note">Fusion now matches the coarse mesh at every budget. It no longer loses to it, and on this data the fine mesh has nothing to add.</p>
+    </section>
+    <section class="group">
+      <h3 class="group-name">Printability of real inks, grouped by publication</h3>
+      
+      <div class="row" tabindex="0" data-tip="Printability, weighted kappa: 0.144 before, 0.373 now (+0.230). Answering the most common level every time scores 0.000.">
+        <div class="row-label"><span class="row-name">Printability</span>
+          <span class="row-measure">weighted kappa</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:0.00%"></span>
+          <span class="bar" style="left:14.37%;width:calc(37.33% - 14.37%)"></span>
+          <span class="dot was" style="left:14.37%"></span>
+          <span class="dot now" style="left:37.33%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.144</span>
+          <span class="v-now">0.373</span></div>
+        <p class="sr-only">Printability, weighted kappa: 0.144 before, 0.373 now (+0.230). Answering the most common level every time scores 0.000.</p>
+      </div>
+      <div class="row" tabindex="0" data-tip="Printability, accuracy: 0.587 before, 0.592 now (+0.005). Answering the most common level every time scores 0.555.">
+        <div class="row-label"><span class="row-name">Printability</span>
+          <span class="row-measure">accuracy</span></div>
+        <div class="track" aria-hidden="true"><span class="grid" style="left:0%"></span><span class="grid" style="left:25%"></span><span class="grid" style="left:50%"></span><span class="grid" style="left:75%"></span><span class="grid" style="left:100%"></span>
+          <span class="ref" style="left:55.51%"></span>
+          <span class="bar" style="left:58.71%;width:calc(59.20% - 58.71%)"></span>
+          <span class="dot was" style="left:58.71%"></span>
+          <span class="dot now" style="left:59.20%"></span>
+        </div>
+        <div class="row-values"><span class="v-was">0.587</span>
+          <span class="v-now">0.592</span></div>
+        <p class="sr-only">Printability, accuracy: 0.587 before, 0.592 now (+0.005). Answering the most common level every time scores 0.555.</p>
+      </div>
+      <p class="group-note">55.5% of inks are rated 3, so accuracy is nearly won by always answering 3. Weighted kappa scores that answer 0.</p>
+    </section>
+    <div class="axis" aria-hidden="true"><div></div><div class="axis-track"><span style="left:0%">0</span><span style="left:25%">0.25</span><span style="left:50%">0.5</span><span style="left:75%">0.75</span><span style="left:100%">1</span></div><div></div></div>
+    <div class="tip" role="status" hidden></div>
+  </figure>
+  <article class="writeup">
+  <p>How this project decides that a model got better, and what that process has turned up so far.</p>
+<pre class="code"><code>.venv/bin/python tools/accuracy_ledger.py             # re-measure everything, print deltas
+.venv/bin/python tools/accuracy_ledger.py --rejected  # what was tried and dropped, with numbers
+.venv/bin/python tools/accuracy_ledger.py --freeze    # adopt the current numbers as the baseline</code></pre>
+<p><code>results/accuracy_baseline.json</code> is the frozen reference. Every run of the ledger re-measures all three headline models and prints the difference against it, so "the model improved" is a number somebody else can reproduce rather than an adjective.</p>
+<hr>
+<h2 id="where-it-stands">Where it stands</h2>
+<p>Not one of the gains in the chart above came from a bigger model. Three came from fixing an estimator, one from changing what gets read off a classifier, and two from letting a model measure how much of its own correction to believe.</p>
+<p><strong>The full ladder</strong>, leave-one-architecture-out on 1806 simulated rows, every model predicting a topology absent from training:</p>
+<div class="table-wrap"><table><thead><tr><th class="">rung</th><th class="num">R²</th><th class="">what it is</th></tr></thead><tbody><tr><td class=""><code>physics_informed</code></td><td class="num">0.7996</td><td class="">best physics prior + a residual scaled by measured trust</td></tr><tr><td class=""><code>gibson_ashby_per_mode</code></td><td class="num">0.7996</td><td class="">one (n, C) per deformation mode</td></tr><tr><td class=""><code>gibson_ashby_balanced</code></td><td class="num">0.7904</td><td class="">one (n, C), one vote per architecture</td></tr><tr><td class=""><code>gibson_ashby_global</code></td><td class="num">0.7828</td><td class="">one (n, C), pooled over rows — the textbook answer</td></tr><tr><td class=""><code>gibson_ashby_per_arch</code></td><td class="num">0.7828</td><td class="">one (n, C) per architecture — degenerate here, by design</td></tr><tr><td class=""><code>plain_ml</code></td><td class="num">0.6538</td><td class="">gradient boosting, no physics</td></tr></tbody></table></div>
+<p>The ceiling: a model handed the held-out architecture's own two parameters scores <strong>0.9534</strong>, and one handed only its exponent scores <strong>0.8475</strong>. So 0.048 of the remaining gap is reachable by predicting the exponent and 0.106 more needs the level too — and neither is reachable from the geometry descriptors available here, which is a result in itself and is why the graveyard below is as long as it is.</p>
+<figure class="plot"><img src="figures/fig2_model_ladder.png" alt="Model ladder under leave-one-architecture-out validation (left), and how much a random split would have inflated printability accuracy (right). The best model beats the textbook power law by 0.017 R², under the 0.02 the figure counts as a meaningful margin, which is why its title says no model meaningfully beats it." loading="lazy"><figcaption>Model ladder under leave-one-architecture-out validation (left), and how much a random split would have inflated printability accuracy (right). The best model beats the textbook power law by 0.017 R², under the 0.02 the figure counts as a meaningful margin, which is why its title says no model meaningfully beats it.</figcaption></figure>
+<hr>
+<h2 id="the-seven-rules">The seven rules</h2>
+<p><strong>1. Freeze a baseline first.</strong> Numbers move for boring reasons — a seed, a library version, a row that stopped converging. Without a frozen file you cannot tell your improvement from the weather.</p>
+<p><strong>2. Find the ceiling before chasing the gap.</strong> Fit each held-out architecture's own power law: no honest model can beat that. It came out at R² = 0.953, and the exponent-only version at 0.848 against a baseline of 0.783. Knowing the whole remaining prize in the exponent was 0.065 is what stopped a week going into hierarchical models to chase it.</p>
+<p><strong>3. Nest every choice made on the score.</strong> A k-nearest-architecture borrow of (n, C) scored 0.818 with <code>k</code> picked by looking at the answer and 0.691 with <code>k</code> picked inside each fold. The 0.035 "gain" was the tuning. Anything selected against the reported metric has to be selected again inside the fold, and usually stops existing when it is.</p>
+<p><strong>4. Fix the estimator before adding a model.</strong> The pooled Gibson–Ashby fit weighted each architecture by how many times the sweep happened to sample it. One vote per architecture instead — no new parameters, no new model — was worth more than every learned correction tried afterwards.</p>
+<p><strong>5. Check the ruler.</strong> Printability accuracy was being reported against a 0.555 majority baseline on an ordinal target, so a model could buy accuracy by collapsing onto the commonest level, and the previous one had. A metric a constant answer nearly wins is not measuring the model.</p>
+<p><strong>6. Degrade gracefully or not at all.</strong> A wrapper that scores below the thing it wraps is a bug, not a trade-off. Fusion scored 0.269 where believing the cheap source alone scored 0.818; the physics-informed model scored 0.647 where its own prior scored 0.783. Both now hold their own floor by construction, because how much of each learned correction to believe is <em>measured</em> on held-out folds rather than assumed.</p>
+<p><strong>7. Split on something the designer can choose.</strong> The per-architecture power law is useless on an unseen topology because the topology label is an <em>identity</em> — a new design has no row in the table. The deformation mode is an <em>input</em>, so a new topology still arrives with one. Before reaching for a bigger model, check whether the grouping variable you already have is one that transfers.</p>
+<hr>
+<h2 id="the-changes">The changes</h2>
+<h3 id="one-vote-per-architecture-models-gibsonashbybalanced">One vote per architecture — <code>models.GibsonAshbyBalanced</code></h3>
+<p><code>0.783 → 0.790.</code> A pooled least-squares fit weights each architecture by how often the sweep sampled it, which is a fact about the sampling schedule and not about cellular solids. Here that was a 4× distortion: the two FDM architectures hold 471 of 1806 rows and one of them has an exponent of 3.9 against a global 2.24, so a quarter of the fit was being pulled by the single most atypical geometry in the study.</p>
+<p>Equal weight per architecture is the same choice the validation protocol already makes — one architecture is one unit of evidence, exactly as one publication is — so this only makes the estimator agree with the way it is scored.</p>
+<h3 id="split-the-power-law-by-deformation-mode-models-gibsonashbypermode">Split the power law by deformation mode — <code>models.GibsonAshbyPerMode</code></h3>
+<p><code>0.790 → 0.800.</code> Gibson–Ashby is not one power law but two: n ≈ 2 when cell walls bend and n ≈ 1 when they stretch. Sheet TPMS are closed membranes carrying load in tension; network TPMS are strut assemblies that bend. Pooling them estimates one exponent for two mechanisms.</p>
+<p>Measured per architecture, the exponents come out as the theory orders them:</p>
+<div class="table-wrap"><table><thead><tr><th class="">mode</th><th class="num">mean n</th><th class="num">sd</th><th class="num">architectures</th></tr></thead><tbody><tr><td class="">sheet</td><td class="num">1.98</td><td class="num">0.34</td><td class="num">8</td></tr><tr><td class="">network</td><td class="num">2.61</td><td class="num">0.78</td><td class="num">8</td></tr><tr><td class="">aligned (FDM)</td><td class="num">1.96</td><td class="num">—</td><td class="num">1</td></tr><tr><td class="">staggered (FDM)</td><td class="num">3.94</td><td class="num">—</td><td class="num">1</td></tr></tbody></table></div>
+<p>The reason this is not <code>gibson_ashby_per_arch</code> wearing a hat is rule 7. Leaving <code>TPMS|gyroid|sheet</code> out still leaves seven other sheet architectures in training, so the fit for "sheet" transfers; leaving it out leaves <em>nothing</em> that knows about gyroids. FDM's two modes hold one architecture each, so under leave-one-architecture-out they correctly fall back to the balanced fit.</p>
+<p>Still two parameters per mode, and no continuous knob tuned on the score. In fairness to rule 3, though, the grouping <em>was</em> compared on the score against two alternatives: per family (FDM vs TPMS) scored 0.7910, and family × mode is identical to mode because mode already implies family. So there was one real competitor, the bending-versus-stretching physics predicted which would win, and it did — but that is a choice between three candidates, not a claim made blind. A shrunk version with the pooling strength chosen inside each fold was built and is in the graveyard.</p>
+<h3 id="a-residual-that-switches-itself-off-models-physicsinformedresidual">A residual that switches itself off — <code>models.PhysicsInformedResidual</code></h3>
+<p><code>0.647 → 0.800.</code> The physics-informed rung used to score <em>below</em> the power law it is built on. The residual it learns is architecture-specific, so on a topology held out entirely the correction is not merely uninformative but actively wrong, and it was being added to a prior that was already right.</p>
+<p>The correction is now multiplied by a trust factor <code>s</code>, and <code>s</code> is estimated rather than chosen: inside <code>fit</code>, the training set is split again by the same grouping the outer protocol uses, the residual stage is refitted on each inner split, and <code>s</code> is the smallest value on a coarse grid whose inner-CV error is within one standard error of the best.</p>
+<p>So the trust placed in the correction is measured under exactly the extrapolation the outer protocol will impose. Under leave-one-architecture-out <code>s</code> comes back as 0 on every fold and the rung reduces to its own physics prior. Handed a random split it recovers <code>s ≈ 1</code>, because under interpolation the residual really is worth trusting — the shrinkage adapts to the question being asked rather than to a constant.</p>
+<p><code>physics_informed</code> scoring identically to <code>gibson_ashby_per_mode</code> is not a coincidence to explain away. At <code>s = 0</code> it <em>is</em> that model, which is the whole point: an ML rung that has learned when it has nothing to add.</p>
+<h3 id="and-have-to-earn-their-place-fusion-multifidelitygp">ρ and δ have to earn their place — <code>fusion.MultiFidelityGP</code></h3>
+<p><code>0.269 → 0.819 at four trusted points; the floor held at all eight budgets.</code></p>
+<p>Co-kriging fits <code>f_high = ρ·f_low + δ</code>. Two things were wrong with that here.</p>
+<p><strong>ρ was a free parameter.</strong> With four trusted points, least squares through the origin fitted ρ to whatever those four happened to say, and a 3% slip on a target of magnitude 3 is a 0.1 shift on <em>every</em> prediction — which is how the fused model scored 0.27 where ignoring the expensive data entirely scored 0.82. Both tiers are the same physical quantity on different meshes, so ρ is 1 up to discretisation error, and the mesh study measures that error directly: ρ now has a prior of N(1, 0.02²), read off <code>data/mesh_convergence.csv</code> rather than tuned.</p>
+<p><strong>Neither correction had to earn its place.</strong> Bounding δ's amplitude stopped it exploding but did not make it useful. Measured against the cheap source alone, the discrepancy term cost −0.104 R² at four trusted points and was <em>still</em> negative at sixty-four; ρ drifting to 1.018 cost another −0.009. A coarse solve already scoring 0.818 leaves a correction very little to learn from a handful of points and plenty of room to invent.</p>
+<p>So both are now multiplied by a trust factor measured the same way the residual's is: leave out each trusted point in turn, refit, and take the least total trust whose error is within one standard error of the best. Predictions are linear in both factors, so one refit per fold prices the whole grid, and <code>gp_low_</code> is deliberately not refitted inside the loop — it is a function of the cheap tier alone and has never seen a trusted point.</p>
+<div class="table-wrap"><table><thead><tr><th class="num">trusted points</th><th class="num">fused (was)</th><th class="num">fused (now)</th><th class="num">high-fidelity alone</th><th class="num">ρ</th><th class="num">δ trust</th></tr></thead><tbody><tr><td class="num">4</td><td class="num">0.269</td><td class="num"><strong>0.819</strong></td><td class="num">−0.902</td><td class="num">1.000</td><td class="num">0.00</td></tr><tr><td class="num">8</td><td class="num">0.615</td><td class="num"><strong>0.819</strong></td><td class="num">0.177</td><td class="num">1.000</td><td class="num">0.00</td></tr><tr><td class="num">16</td><td class="num">0.692</td><td class="num"><strong>0.819</strong></td><td class="num">0.506</td><td class="num">1.000</td><td class="num">0.00</td></tr><tr><td class="num">32</td><td class="num">0.762</td><td class="num"><strong>0.819</strong></td><td class="num">0.654</td><td class="num">1.000</td><td class="num">0.00</td></tr><tr><td class="num">64</td><td class="num">0.768</td><td class="num"><strong>0.821</strong></td><td class="num">0.765</td><td class="num">1.000</td><td class="num">0.00</td></tr></tbody></table></div>
+<p>The cheap source alone scores 0.8184 — the floor fusion must never fall below. It now holds it at every budget.</p>
+<p><strong>Read that table honestly.</strong> Both trust factors come back at zero, so the improvement is <em>not</em> that fusion started working. It is that the model now correctly reports that on this mesh pair the expensive tier has nothing to add which the coarse one did not already have — instead of losing 0.10 R² pretending otherwise. That is rule 6 doing its job, and it is the property the whole argument for fusion rests on: a correction with no evidence behind it must vanish and leave <code>ρ·f_low</code> standing. On a mesh pair where the coarse solve was genuinely worse, or with Tier 3 measurements in place of fine-mesh solves, the same machinery is what would let δ switch back on.</p>
+<figure class="plot"><img src="figures/fig4_multifidelity.png" alt="Fused model against the coarse mesh alone and the fine mesh alone, as the number of trusted fine-mesh points grows. The coarse-mesh line is dashed on top because the fused curve now sits exactly on it." loading="lazy"><figcaption>Fused model against the coarse mesh alone and the fine mesh alone, as the number of trusted fine-mesh points grows. The coarse-mesh line is dashed on top because the fused curve now sits exactly on it.</figcaption></figure>
+<h3 id="printability-is-ordinal-and-accuracy-was-the-wrong-ruler-pipeline-printability-py">Printability is ordinal, and accuracy was the wrong ruler — <code>pipeline/printability.py</code></h3>
+<p><code>QWK 0.144 → 0.375, Spearman 0.278 → 0.546, accuracy 0.587 → 0.593.</code></p>
+<p>Printability is a 0–3 score that was being predicted with a multiclass classifier treating those four levels as four unrelated names. Calling a 3 a 0 was scored exactly as badly as calling it a 2, so the model had no reason to prefer being close, and its ranking was nearly worthless even while its accuracy looked respectable.</p>
+<p>And accuracy is degenerate on this target: 55.5% of rows are level 3, so answering "3" to everything scores 0.555 and the honest grouped number to beat was only +0.029 above that. A model can buy accuracy by collapsing toward the majority level, which is precisely what the classifier was doing.</p>
+<p>The fix is one change, not two: keep the classifier — the levels really are discrete and it models them well — but read out its <strong>probability-weighted expected level</strong>, Σk·pₖ, instead of its argmax. A row the forest splits between levels 2 and 3 becomes a 2.4 instead of a coin flip between two labels the metric treats as equally far apart.</p>
+<div class="table-wrap"><table><thead><tr><th class="">grouped readout</th><th class="num">accuracy</th><th class="num">QWK</th><th class="num">MAE (levels)</th><th class="num">Spearman</th></tr></thead><tbody><tr><td class="">answer the majority level to everything</td><td class="num">0.555</td><td class="num">0.000</td><td class="num">0.726</td><td class="num">0.000</td></tr><tr><td class="">classifier argmax</td><td class="num">0.587</td><td class="num">0.144</td><td class="num">0.645</td><td class="num">0.278</td></tr><tr><td class="">expected level Σk·pₖ</td><td class="num"><strong>0.593</strong></td><td class="num"><strong>0.375</strong></td><td class="num"><strong>0.604</strong></td><td class="num"><strong>0.546</strong></td></tr></tbody></table></div>
+<p>Strictly better on every measure at once, accuracy included. (Recomputed on GitHub's Linux servers the expected-level row comes out at 0.592 accuracy and 0.373 QWK: random forests move in the third decimal between operating systems. The stiffness ladder and the fusion results reproduce there to four decimals.) Quadratic-weighted kappa is reported alongside accuracy from here on, because it is the one metric answering "3" to everything cannot win: it scores exactly 0.</p>
+<p>Features are enriched at the same time. Raw %w/v columns describe an ink by how much of each of fifty possible ingredients it contains, which makes two inks of identical chemistry at different dilutions look unrelated. Composition is therefore also expressed as fractions of total solids, plus total solids itself, the component count, and two extrusion ratios carrying the shear the ink actually sees.</p>
+<hr>
+<h2 id="the-graveyard">The graveyard</h2>
+<p>Everything below was built, measured and dropped. It is in the repository so the next person does not spend the same week, and so "you should have tried X" comes with a number attached rather than an opinion. <code>tools/accuracy_ledger.py --rejected</code> prints it.</p>
+<p><strong>Ladder</strong> — leave-one-architecture-out R², textbook 0.7828, adopted 0.7996.</p>
+<div class="table-wrap"><table><thead><tr><th class="num">score</th><th class="">what</th><th class="">why it went</th></tr></thead><tbody><tr><td class="num">0.8180</td><td class="">kNN over architectures, k = 8 chosen on the score</td><td class=""><strong>Reported high and false.</strong> The same estimator scores 0.691 once <code>k</code> is chosen inside the fold. Rule 3.</td></tr><tr><td class="num">0.7910</td><td class="">per-<em>family</em> power law (FDM vs TPMS)</td><td class="">family is design-time knowledge too, but it splits where the physics does not — sheet and network TPMS share a family and differ by 0.6 in exponent</td></tr><tr><td class="num">0.7904</td><td class="">per-mode law shrunk toward the pooled fit, λ nested</td><td class="">came back ambiguous: one-SE picks λ = 0 (0.7904), argmin picks 0.75 (0.8000) on the same inner folds. A knob whose answer depends on which standard-error convention you hold is not evidence, so the adopted model has no knob</td></tr><tr><td class="num">0.7904</td><td class="">two-term C₁ρⁿ + C₂ρ (bending + stretching)</td><td class="">not rejected on score — C₂ fits to zero, so it <em>is</em> the adopted single-term fit with two extra parameters</td></tr><tr><td class="num">0.7829</td><td class="">cubic in log ρ</td><td class="">curvature confounded with the between-architecture spread, plus variance</td></tr><tr><td class="num">0.7826</td><td class="">percolation form C(ρ − ρ_c)ⁿ</td><td class="">ρ_c fits to its lower bound; no architecture-transferable threshold</td></tr><tr><td class="num">0.7770</td><td class="">Huber loss on the power law</td><td class="">the tails it downweights are real geometries, not outliers</td></tr><tr><td class="num">0.7754</td><td class="">quadratic in log ρ</td><td class="">as cubic</td></tr><tr><td class="num">0.7615</td><td class="">dimensionless-only feature block for the residual</td><td class="">scale-free features transfer no better than the existing design block</td></tr><tr><td class="num">0.7160</td><td class="">hierarchical GA: ridge from design-time morphometry → (n, C)</td><td class="">17 architecture-level points, 8 descriptors; the best descriptor correlates 0.61 with n and that is not enough</td></tr><tr><td class="num">0.6910</td><td class="">hierarchical GA: kernel pooling, h and λ nested per fold</td><td class="">the honest version of the kNN borrow; nesting removed the gain entirely</td></tr></tbody></table></div>
+<p><strong>Fusion</strong> — R² on held-out fine-mesh cases, cheap source 0.8184.</p>
+<div class="table-wrap"><table><thead><tr><th class="num">score</th><th class="">what</th><th class="">why it went</th></tr></thead><tbody><tr><td class="num">0.8221</td><td class="">stacking ρ·f_low with a high-fidelity GP, weight nested by LOO</td><td class="">that score is at 4 points only, where one of five draws took a 10% weight; at every other budget the weight is 0 and it <em>is</em> the adopted model plus a second GP per fold. +0.003 on one budget does not buy the machinery</td></tr><tr><td class="num">0.7208</td><td class="">discrepancy trust by LOO argmin instead of one-SE</td><td class="">at 4 trusted points argmin believes 35% of a correction fitted to 3 of them</td></tr></tbody></table></div>
+<p><strong>Printability</strong> — grouped-by-DOI accuracy, majority 0.555, adopted 0.593.</p>
+<div class="table-wrap"><table><thead><tr><th class="num">score</th><th class="">what</th><th class="">why it went</th></tr></thead><tbody><tr><td class="num">0.512</td><td class="">cut points fitted to maximise QWK inside each fold</td><td class="">QWK rises to 0.477 but accuracy falls 0.08 — the cut points buy ordinal agreement by moving mass off the majority level. A real trade-off rather than an improvement</td></tr><tr><td class="num">0.572</td><td class="">ExtraTrees in place of the random forest</td><td class="">QWK 0.341; worse on both</td></tr></tbody></table></div>
+<hr>
+<h2 id="adding-to-this">Adding to this</h2>
+<p>A new idea is adopted only if it clears all seven rules. In practice:</p>
+<ol><li><code>tools/accuracy_ledger.py --freeze</code> if the current numbers are not already the frozen baseline.</li><li>Build the variant. If it has a hyperparameter, select that hyperparameter <em>inside</em> the fold before reporting anything — rule 3 has claimed more candidates here than any other.</li><li>Re-run the ledger and read the delta.</li><li>If it does not clear the floor of whatever it wraps, it is not a trade-off, it is a bug — see rule 6.</li><li>Whichever way it goes, add it to <code>REJECTED</code> in <code>tools/accuracy_ledger.py</code> with its number and one line on why. A measured failure is a contribution; an unmeasured opinion is not.</li></ol>
+  </article>
+  <footer>
+    <p>Every number on this page is generated from the pipeline's own output files by
+    <code>tools/build_site.py</code>, built from commit <code>60b5d09</code> with uncommitted changes on 13 September 2026.</p>
+    <p>These numbers were recomputed from scratch on GitHub's servers: <a href="https://github.com/Harigovind777/bone-scaffold-predictor/actions/runs/34741348660">open the run log</a> to see the self-tests, the accuracy ledger and the pipeline output that produced this page.</p>
+    <p>The code behind every number: <a href="https://github.com/Harigovind777/bone-scaffold-predictor/tree/60b5d096f77d6e294c0e9e0d56437e05877e98e1">the repository at this commit</a>.</p>
+  </footer>
+</main>
+<script>
+(() => {
+  const ledger = document.querySelector('.ledger');
+  const tip = ledger.querySelector('.tip');
+  const show = row => {
+    tip.textContent = row.dataset.tip;
+    tip.hidden = false;
+    const box = ledger.getBoundingClientRect(), r = row.querySelector('.track').getBoundingClientRect();
+    const left = Math.min(Math.max(r.left - box.left, 12), box.width - tip.offsetWidth - 12);
+    tip.style.left = left + 'px';
+    tip.style.top = (r.top - box.top - tip.offsetHeight - 6) + 'px';
+  };
+  const hide = () => { tip.hidden = true; };
+  ledger.querySelectorAll('.row').forEach(row => {
+    row.addEventListener('mouseenter', () => show(row));
+    row.addEventListener('mouseleave', hide);
+    row.addEventListener('focus', () => show(row));
+    row.addEventListener('blur', hide);
+  });
+})();
+</script>
+</body>
+</html>
