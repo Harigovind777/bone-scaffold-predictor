@@ -248,8 +248,16 @@ def fig_multifidelity(mf):
         g = mf[mf.model == m].sort_values("n_high")
         if g.empty:
             continue
-        ax.plot(g.n_high, g.r2, "-o", lw=2, ms=7, color=SERIES[i],
-                markeredgecolor=SURFACE, markeredgewidth=1.2, label=label[m])
+        if m == "low_only":
+            # The floor is drawn as a dashed line ON TOP. When fusion correctly declines
+            # to correct the cheap source the two curves coincide exactly, and a solid
+            # floor drawn first disappears under the fused line - hiding the very
+            # comparison the figure exists to make.
+            ax.plot(g.n_high, g.r2, "--", lw=1.8, color=SERIES[i], zorder=5,
+                    label=label[m])
+        else:
+            ax.plot(g.n_high, g.r2, "-o", lw=2, ms=7, color=SERIES[i], zorder=3,
+                    markeredgecolor=SURFACE, markeredgewidth=1.2, label=label[m])
         # Spread across repeated draws of the high-fidelity subset. Without it the reader
         # cannot tell a real budget effect from the luck of one draw.
         if "r2_std" in g and g.r2_std.notna().any() and g.r2_std.abs().sum() > 0:

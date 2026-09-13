@@ -94,11 +94,14 @@ without a fresh solve, and `--solve` to mesh and solve a geometry the sweep neve
 (~1 s, measured end-to-end through the web API). Importable too:
 `from tools.predict import predict`.
 
-**What predicts what.** The modulus is *not* taken from a learned surrogate — under
-leave-one-architecture-out the surrogate scores R² = 0.65 against 0.78 for the
-Gibson–Ashby law it is built on, so using it would dress up a worse predictor as a better
-one. What runs is the fitted (n, C) for that architecture plus the zero-learned-parameter
-decoder in `sim/physics.py`. Where a measured `E_rel` exists at the requested porosity, C
+**What predicts what.** The modulus is *not* taken from a learned surrogate. Under
+leave-one-architecture-out the surrogate used to score R² = 0.65 against 0.78 for the
+Gibson–Ashby law it is built on — using it would have dressed up a worse predictor as a
+better one. It now scores 0.800, because it learned to switch itself off: the residual
+stage is scaled by a factor estimated inside each fold, and on a topology held out
+entirely that factor comes back as exactly zero. A model that knows when it has nothing
+to add is the useful kind. What runs is still the fitted (n, C) for that architecture
+plus the zero-learned-parameter decoder in `sim/physics.py`. Where a measured `E_rel` exists at the requested porosity, C
 is re-anchored so the trajectory starts exactly on it and the fitted exponent governs only
 how stiffness *moves* as degradation opens the structure up.
 
@@ -125,14 +128,17 @@ at and it says so loudly rather than returning a confident number.
 | `pipeline/report.py` | Figures and companion tables |
 | `webapp/server.py` | **The web interface** — stdlib HTTP server over the same code paths |
 | `webapp/index.html` | Single-page UI: predict, results dashboard, live pipeline runner |
+| `pipeline/printability.py` | Tier 1 printability as an **ordinal** target, and the readout that makes it one |
 | `tools/predict.py` | **The prediction interface** — one scaffold spec → properties, trajectory, verdict, provenance |
+| `tools/accuracy_ledger.py` | **The accuracy framework** — every headline model re-measured against a frozen baseline |
+| `ACCURACY.md` | The framework written up: seven rules, every change and why, and the measured graveyard |
 | `tools/selftest.py` | 26 physics, pipeline-contract and JSON-output checks |
 | `tools/validate_curation.py` | Gate for Tier 3 curation sheets |
 | `results/` | Everything the pipeline produces — `README.md`, `metrics.json`, `figures/`, `tables/` |
 
 ---
 
-## Three design decisions that shape everything
+## Four design decisions that shape everything
 
 **1. Validation is grouped, never random.**
 Rows from one publication share a material batch, a printer and an operator; rows from one
@@ -152,6 +158,70 @@ A scaffold with closed porosity is not a slightly worse scaffold — bone cannot
 it at any modulus. Folding that into a weighted objective lets a good stiffness score buy
 off a fatal geometry, so connectivity, pore size, strut printability and porosity are
 filters applied before scoring.
+
+**4. Accuracy is a delta against a frozen number, not an adjective.**
+`results/accuracy_baseline.json` holds every headline score as it stood before the last
+round of work, and `tools/accuracy_ledger.py` re-measures all of them and prints the
+difference. It also carries the ceiling — what a model that knew the held-out
+architecture's own power law would score — so the size of the remaining prize is visible
+rather than assumed, and a list of the variants that were built, measured and dropped,
+so nobody spends that week twice.
+
+---
+
+## Improving accuracy: what worked and what did not
+
+**The full write-up is [`ACCURACY.md`](ACCURACY.md)** — the seven rules, every change with
+its reasoning, and the graveyard of variants that were measured and dropped.
+
+```bash
+.venv/bin/python tools/accuracy_ledger.py             # the ledger, with deltas
+.venv/bin/python tools/accuracy_ledger.py --rejected  # the graveyard, with numbers
+```
+
+| model | metric | was | now |
+|---|---|---|---|
+| physics-informed residual, leave-one-architecture-out | R² | 0.647 | **0.800** |
+| Gibson–Ashby power law, leave-one-architecture-out | R² | 0.783 | **0.800** |
+| multi-fidelity fusion, 4 trusted points | R² | 0.269 | **0.819** |
+| multi-fidelity fusion, 64 trusted points | R² | 0.768 | **0.821** |
+| printability (grouped by DOI) | QWK | 0.144 | **0.375** |
+| printability (grouped by DOI) | Spearman | 0.278 | **0.546** |
+
+Five changes, and none of them is a bigger model.
+
+**One vote per architecture.** The pooled power-law fit weighted each architecture by how
+often the sweep sampled it — two FDM architectures held 471 of 1806 rows. Equal weight
+per architecture is the choice the validation protocol already makes. 0.783 → 0.790.
+
+**Split the power law by deformation mode.** Gibson–Ashby predicts different exponents for
+bending- and stretch-dominated structures, and the data agree: sheet TPMS average n = 1.98,
+network TPMS 2.61. Unlike the topology label, the mode is an *input* a new design arrives
+with, so a per-mode fit transfers to topologies the sweep never saw where a
+per-architecture table cannot. 0.790 → 0.800, no parameter tuned on the score.
+
+**The residual learns when to shut up.** The physics-informed rung used to score *below*
+its own prior. Its correction is now scaled by a trust factor estimated inside each fold;
+on an unseen topology it comes back as 0 and the rung reduces to the per-mode prior
+instead of undercutting it. 0.647 → 0.800.
+
+**ρ and δ have to earn their place.** Co-kriging fits `f_high = ρ·f_low + δ`. ρ now has a
+physics prior N(1, 0.02²) read off the mesh study, and both ρ − 1 and δ are scaled by trust
+factors measured by leave-one-out on the trusted points. Both come back at 0 at every
+budget: on this mesh pair the fine solve adds nothing the coarse one lacks, and the model
+now says so instead of losing 0.10 R² pretending otherwise. It holds the cheap-source
+floor (0.818) at all eight budgets, where it used to fall as low as 0.269.
+
+**Printability is ordinal, and accuracy was the wrong ruler.** 55.5% of rows are level 3,
+so answering "3" to everything scores 0.555. Reading the classifier's expected level
+Σk·pₖ instead of its argmax improves every metric at once, and quadratic-weighted kappa —
+which the majority answer scores 0 on — is reported alongside accuracy.
+
+**What did not work.** Hierarchical (n, C) from morphometry, kNN over architectures once
+`k` is nested, curvature and percolation forms, Huber loss, stacking fusion, QWK-optimised
+cut points — all measured, all in `ACCURACY.md` with their numbers. The oracle ceiling is
+0.953, so the remaining prize is real, but it is not reachable from the descriptors
+available here.
 
 ---
 

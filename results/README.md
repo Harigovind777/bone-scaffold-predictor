@@ -8,24 +8,37 @@ Leave-one-architecture-out: every model is trained with one whole topology remov
 
 | model | R² (log E/Es) | Spearman | typical error |
 |---|---|---|---|
+| physics informed | +0.800 | 0.963 | ×1.18 |
+| gibson ashby per mode | +0.800 | 0.963 | ×1.18 |
+| gibson ashby balanced | +0.790 | 0.960 | ×1.19 |
 | gibson ashby global | +0.783 | 0.958 | ×1.22 |
 | gibson ashby per arch | +0.783 | 0.958 | ×1.22 |
 | plain ml | +0.654 | 0.935 | ×1.23 |
-| physics informed | +0.647 | 0.937 | ×1.21 |
 
-Best model **gibson_ashby_per_arch** beats the textbook Gibson-Ashby power law by **+0.000 R²**.
+Best model **gibson_ashby_per_mode** beats the textbook Gibson-Ashby power law by **+0.017 R²**.
 
 `gibson_ashby_per_arch` scoring identically to the global fit is not a bug - it is the point. Held-out architectures have no fitted (n, C) to look up, so a per-architecture table has nothing to say about a new design.
 
+`physics_informed` scoring identically to `gibson_ashby_balanced` is the shrinkage working rather than a second coincidence. The residual stage is scaled by a factor estimated inside each fold, and on a topology held out entirely that factor comes back as exactly 0 - so the model reduces to its own physics prior instead of scoring below it, which is what it used to do (0.647). The ML rung has learned when it has nothing to add.
+
 ## 2. What a random split would have claimed instead
 
-| protocol | accuracy |
-|---|---|
-| random 5-fold | 0.826 |
-| grouped by DOI (88 groups) | 0.584 |
-| majority-class baseline | 0.555 |
+| protocol | accuracy | QWK |
+|---|---|---|
+| random 5-fold | 0.747 | 0.764 |
+| grouped by DOI (88 groups) | 0.593 | 0.375 |
+| answer the majority level to everything | 0.555 | 0.000 |
 
-Random splitting inflates accuracy by **+0.242** on MLATE printability. Rows from one publication share a material batch, a printer and an operator, so a random split puts near-duplicates on both sides. Verdict: the honest score beats the baseline by +0.029.
+Random splitting inflates accuracy by **+0.154** on MLATE printability. Rows from one publication share a material batch, a printer and an operator, so a random split puts near-duplicates on both sides.
+
+Printability is an ordinal 0-3 score and 55.5% of rows sit at level 3, so accuracy is close to useless on its own: answering "3" to everything scores 0.555. Quadratic-weighted kappa scores that same answer 0.000, so it is the number to read.
+
+| grouped readout | accuracy | QWK | MAE (levels) | Spearman |
+|---|---|---|---|---|
+| classifier argmax | 0.587 | 0.144 | 0.645 | 0.278 |
+| expected level Σk·pₖ | 0.593 | 0.375 | 0.604 | 0.546 |
+
+Reading the forest's expected level instead of its argmax improves every column at once — QWK 0.144 → 0.375 and Spearman 0.278 → 0.546 — because a row the forest splits between levels 2 and 3 should be a 2.5, not a coin flip between two labels the metric treats as equally far apart. Verdict: QWK 0.375 against 0.000 for answering the majority level to everything; accuracy beats that baseline by +0.038.
 
 ## 3. How much of the answer is the mesh?
 
@@ -41,7 +54,9 @@ Random splitting inflates accuracy by **+0.242** on MLATE printability. Rows fro
 
 Co-kriging fuses the cheap source (grid 20) with a handful of trusted points (grid 44), scored on held-out grid-44 data and averaged over repeated nested draws.
 
-With only **4** trusted points the fused model reaches R² = **0.269**, where fitting those same 4 points alone gives R² = -0.902 — an unusable model. That gap is the argument for fusion. Best fused R² = 0.768 at 64 points (ρ = 1.056); by then the single-fidelity model has caught up (0.764), which is itself the answer to 'how many rows is enough'.
+With only **4** trusted points the fused model reaches R² = **0.819**, where fitting those same 4 points alone gives R² = -0.902 — an unusable model. Best fused R² = 0.821 at 64 points (ρ = 1.000); by then the single-fidelity model has climbed to 0.764.
+
+Read that against the floor: the cheap source alone scores **0.818**. How much of ρ − 1 and of the discrepancy term to believe is measured by leave-one-out on the trusted points, and here the discrepancy trust averages **0.00** — on this mesh pair the fine solve adds nothing the coarse one lacks, so fusion holds the floor rather than beating it, where it used to fall 0.55 below it at four points. That is the model reporting honestly, not fusion working; the same machinery is what lets the correction switch on when a trusted source genuinely disagrees with the cheap one.
 
 Swap curated literature rows in as the high-fidelity source and this stage runs unchanged - that is the argument for the curation effort, quantified.
 
@@ -68,9 +83,3 @@ The pipeline runs end-to-end on simulation alone today. Tier 3 rows are picked u
 
 ## Figures
 
-- `figures/fig1_gibson_ashby.png`
-- `figures/fig2_model_ladder.png`
-- `figures/fig5_anisotropy.png`
-- `figures/fig3_convergence.png`
-- `figures/fig4_multifidelity.png`
-- `figures/fig6_design.png`
