@@ -1,0 +1,8 @@
+# Exact versions that produced the committed results/ - the GitHub Actions run installs
+# these so a re-run on GitHub reproduces the same numbers rather than whatever is newest.
+numpy==2.5.1
+pandas==3.0.5
+scikit-learn==1.9.0
+scipy==1.18.0
+matplotlib==3.11.1
+openpyxl==3.1.5

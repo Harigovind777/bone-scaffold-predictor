@@ -22,12 +22,10 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GroupKFold, KFold, cross_val_score
 
 from pipeline import config as C
 from pipeline import data as D
-from pipeline import fusion, inverse, models, report, validation as V
+from pipeline import fusion, inverse, models, printability as P, report, validation as V
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*ConvergenceWarning.*")
@@ -77,10 +75,14 @@ def stage_model_ladder(sim):
     X = D.build_features(df, allow_solved=False)
     y = D.get_target(df, TARGET)
     groups = df.architecture
-    print(f"{X.shape[1]} design features · {groups.nunique()} architectures held out in turn")
+    # The deformation mode is a design-time INPUT, not a topology identity, so unlike
+    # `architecture` it survives being handed a topology the sweep never saw.
+    modes = df["mode"]
+    print(f"{X.shape[1]} design features · {groups.nunique()} architectures held out in "
+          f"turn · {modes.nunique()} deformation modes")
 
     rows = []
-    for name, factory in models.model_zoo(groups=groups).items():
+    for name, factory in models.model_zoo(groups=groups, modes=modes).items():
         res = V.cross_validate(factory, X, y, V.leave_one_group_out(groups))
         rows.append(dict(model=name, r2=res["r2"], rmse=res["rmse"],
                          spearman=res["spearman"], r2_linear=res["r2_linear"],
@@ -95,8 +97,13 @@ def stage_model_ladder(sim):
     print(f"\nBest: {best.model} (R2={best.r2:.3f}) vs textbook Gibson-Ashby "
           f"(R2={ga.r2:.3f}) - a gain of {best.r2 - ga.r2:+.3f}")
 
-    # Which design variables the winner leans on - the interpretability the viva needs.
-    winner = models.PhysicsInformedResidual(kind="rf").fit(X, y)
+    # Which design variables the RESIDUAL leans on - the interpretability the viva needs.
+    # shrink=False here on purpose: under leave-one-architecture-out the shrinkage is 0,
+    # and permuting the inputs of a correction that has been scaled to nothing would
+    # report every feature as worth exactly zero. The question this table answers is
+    # "what does the correction key off when it is allowed to act", which is the
+    # unshrunk model.
+    winner = models.PhysicsInformedResidual(kind="rf", shrink=False).fit(X, y)
     imp = models.permutation_importance(winner, X, y).head(10)
     print("\nTop design variables (permutation importance on the residual model):")
     print(imp.to_string(index=False))
@@ -109,8 +116,17 @@ def stage_model_ladder(sim):
 def stage_leakage(sim, X, y, groups):
     section(3, "Leakage audit - what a random split would have claimed")
 
-    # (a) simulated data, grouped by architecture
-    gap_sim = V.leakage_gap(lambda: models.PhysicsInformedResidual(), X, y, groups)
+    # (a) simulated data, grouped by architecture.
+    #
+    # shrink=False deliberately. This stage measures what the SPLIT does, so the model
+    # has to be the same model on both sides of the comparison; the shrunk version
+    # adapts its trust in the residual to whichever protocol it is handed, which is the
+    # right behaviour everywhere else and exactly wrong here - it would absorb the
+    # leakage into the model and report a gap that had been quietly closed rather than
+    # measured. The gap below is therefore the honest size of the problem, and the
+    # shrinkage in the ladder above is the response to it.
+    gap_sim = V.leakage_gap(lambda: models.PhysicsInformedResidual(shrink=False),
+                            X, y, groups)
     print(f"Simulated modulus  random R2={gap_sim['random']['r2']:.3f}  "
           f"grouped R2={gap_sim['grouped']['r2']:.3f}  "
           f"inflation={gap_sim['r2_gap']:+.3f}")
@@ -118,36 +134,48 @@ def stage_leakage(sim, X, y, groups):
     # (b) MLATE printability, grouped by DOI - the real-publication version of the claim
     panel = None
     mlate = D.load_mlate(bone_only=False)
-    if mlate is not None and "Printability" in mlate.columns:
-        m = mlate.dropna(subset=["Printability", "DOI"]).copy()
-        # Every target column has to go, not just the one being predicted. "Scaffold
-        # Quality (P*C)" is Printability x Cell Response, so leaving either of those in
-        # hands the model the answer and inflates BOTH split protocols - which would
-        # have hidden the very leakage this stage exists to measure.
-        leaky = ["Printability", "Cell Response", "Scaffold Quality (P*C)"]
-        feats = m.select_dtypes(include=[np.number]).drop(columns=leaky, errors="ignore")
-        feats = feats.loc[:, feats.notna().mean() > 0.5].fillna(feats.median())
-        yy = m["Printability"].astype(int)
-        gg = m["DOI"].astype(str)
+    if mlate is not None and P.TARGET in mlate.columns:
+        m = mlate.dropna(subset=[P.TARGET, "DOI"]).copy()
+        yy = m[P.TARGET].astype(int).values
+        gg = m["DOI"].astype(str).values
+        X_old, X_new = P.build_features(m, enrich=False), P.build_features(m, enrich=True)
+        base = P.majority_baseline(yy)
 
-        clf = RandomForestClassifier(n_estimators=400, min_samples_leaf=2,
-                                     n_jobs=-1, random_state=C.SEED)
-        acc_rand = cross_val_score(clf, feats, yy,
-                                   cv=KFold(5, shuffle=True, random_state=C.SEED)).mean()
-        acc_grp = cross_val_score(clf, feats, yy, groups=gg,
-                                  cv=GroupKFold(5)).mean()
-        baseline = yy.value_counts(normalize=True).max()
-        print(f"MLATE printability random acc={acc_rand:.3f}  grouped acc={acc_grp:.3f}  "
-              f"majority baseline={baseline:.3f}  inflation={acc_rand-acc_grp:+.3f}")
-        verdict = ("the honest score does NOT beat guessing the majority class"
-                   if acc_grp <= baseline else
-                   f"the honest score beats the baseline by {acc_grp-baseline:+.3f}")
+        # The old model and the new one, scored side by side on the same folds. Printing
+        # both is the point: the improvement has to be visible, not asserted.
+        old_grp = P.evaluate(X_old, yy, gg, readout=P.argmax_level, grouped=True)
+        new_grp = P.evaluate(X_new, yy, gg, readout=P.expected_level, grouped=True)
+        new_rand = P.evaluate(X_new, yy, gg, readout=P.expected_level, grouped=False)
+
+        print(f"MLATE printability ({len(yy)} rows, {pd.Series(gg).nunique()} DOIs, "
+              f"levels 0-3, {base['accuracy']:.1%} are level 3)")
+        print(f"  {'readout':28s} {'acc':>7s} {'QWK':>7s} {'MAE':>7s} {'rho':>7s}")
+        print(f"  {'majority level (baseline)':28s} {base['accuracy']:7.3f} "
+              f"{base['qwk']:7.3f} {base['mae_levels']:7.3f} {base['spearman']:7.3f}")
+        print(f"  {'classifier argmax [was]':28s} {old_grp['accuracy']:7.3f} "
+              f"{old_grp['qwk']:7.3f} {old_grp['mae_levels']:7.3f} {old_grp['spearman']:7.3f}")
+        print(f"  {'expected level [now]':28s} {new_grp['accuracy']:7.3f} "
+              f"{new_grp['qwk']:7.3f} {new_grp['mae_levels']:7.3f} {new_grp['spearman']:7.3f}")
+        print(f"  grouped-by-DOI vs random 5-fold: accuracy "
+              f"{new_grp['accuracy']:.3f} vs {new_rand['accuracy']:.3f}  "
+              f"(inflation {new_rand['accuracy']-new_grp['accuracy']:+.3f}), QWK "
+              f"{new_grp['qwk']:.3f} vs {new_rand['qwk']:.3f}")
+
+        # Accuracy alone cannot separate "learned something" from "collapsed onto the
+        # majority level", so the verdict is stated on QWK, which the majority answer
+        # scores exactly 0 on.
+        verdict = (f"QWK {new_grp['qwk']:.3f} against 0.000 for answering the majority "
+                   f"level to everything; accuracy beats that baseline by "
+                   f"{new_grp['accuracy']-base['accuracy']:+.3f}")
         print(f"  -> {verdict}")
 
         panel = dict(dataset="MLATE printability", metric="accuracy", group_by="DOI",
-                     random=float(acc_rand), grouped=float(acc_grp),
-                     baseline=float(baseline), n_groups=int(gg.nunique()),
-                     verdict=verdict)
+                     random=new_rand["accuracy"], grouped=new_grp["accuracy"],
+                     baseline=base["accuracy"], n_groups=int(pd.Series(gg).nunique()),
+                     verdict=verdict,
+                     levels=int(len(np.unique(yy))),
+                     grouped_full=new_grp, random_full=new_rand,
+                     previous_readout=old_grp, baseline_full=base)
 
     RESULTS["leakage"] = dict(
         simulated=dict(random_r2=gap_sim["random"]["r2"], grouped_r2=gap_sim["grouped"]["r2"],
@@ -261,7 +289,8 @@ def stage_fusion():
 
     best_fused = mf[mf.model == "fused"].sort_values("r2").iloc[-1]
     print(f"\nbest fused R2={best_fused.r2:.3f} at {int(best_fused.n_high)} high-fidelity "
-          f"points (rho={best_fused.rho:.3f})")
+          f"points (rho={best_fused.rho:.3f}, discrepancy trust="
+          f"{best_fused.get('delta_trust', float('nan')):.2f})")
     RESULTS["fusion"] = dict(skipped=False, low_grid=int(lo_grid), high_grid=int(hi_grid),
                              n_paired_cases=len(cases), table=mf.round(4).to_dict("records"))
     return conv, mf
@@ -356,20 +385,47 @@ def write_summary():
               f"**{best.r2 - ga.r2:+.3f} R²**.", "",
           "`gibson_ashby_per_arch` scoring identically to the global fit is not a bug - it "
           "is the point. Held-out architectures have no fitted (n, C) to look up, so a "
-          "per-architecture table has nothing to say about a new design.", ""]
+          "per-architecture table has nothing to say about a new design.", "",
+          "`physics_informed` scoring identically to `gibson_ashby_balanced` is the "
+          "shrinkage working rather than a second coincidence. The residual stage is "
+          "scaled by a factor estimated inside each fold, and on a topology held out "
+          "entirely that factor comes back as exactly 0 - so the model reduces to its "
+          "own physics prior instead of scoring below it, which is what it used to do "
+          "(0.647). The ML rung has learned when it has nothing to add.", ""]
 
     lk = RESULTS.get("leakage", {})
     if lk.get("mlate"):
         m = lk["mlate"]
+        g, r, b = m["grouped_full"], m["random_full"], m["baseline_full"]
+        prev = m["previous_readout"]
         L += ["## 2. What a random split would have claimed instead", "",
-              f"| protocol | accuracy |", "|---|---|",
-              f"| random 5-fold | {m['random']:.3f} |",
-              f"| grouped by {m['group_by']} ({m['n_groups']} groups) | {m['grouped']:.3f} |",
-              f"| majority-class baseline | {m['baseline']:.3f} |", "",
-              f"Random splitting inflates accuracy by **{m['random']-m['grouped']:+.3f}** "
+              f"| protocol | accuracy | QWK |", "|---|---|---|",
+              f"| random 5-fold | {r['accuracy']:.3f} | {r['qwk']:.3f} |",
+              f"| grouped by {m['group_by']} ({m['n_groups']} groups) | "
+              f"{g['accuracy']:.3f} | {g['qwk']:.3f} |",
+              f"| answer the majority level to everything | {b['accuracy']:.3f} | 0.000 |",
+              "",
+              f"Random splitting inflates accuracy by **{r['accuracy']-g['accuracy']:+.3f}** "
               f"on {m['dataset']}. Rows from one publication share a material batch, a "
               f"printer and an operator, so a random split puts near-duplicates on both "
-              f"sides. Verdict: {m['verdict']}.", ""]
+              f"sides.", "",
+              "Printability is an ordinal 0-3 score and "
+              f"{b['accuracy']:.1%} of rows sit at level 3, so accuracy is close to "
+              "useless on its own: answering \"3\" to everything scores "
+              f"{b['accuracy']:.3f}. Quadratic-weighted kappa scores that same answer "
+              "0.000, so it is the number to read.", "",
+              "| grouped readout | accuracy | QWK | MAE (levels) | Spearman |",
+              "|---|---|---|---|---|",
+              f"| classifier argmax | {prev['accuracy']:.3f} | {prev['qwk']:.3f} | "
+              f"{prev['mae_levels']:.3f} | {prev['spearman']:.3f} |",
+              f"| expected level Σk·pₖ | {g['accuracy']:.3f} | {g['qwk']:.3f} | "
+              f"{g['mae_levels']:.3f} | {g['spearman']:.3f} |", "",
+              f"Reading the forest's expected level instead of its argmax improves every "
+              f"column at once — QWK {prev['qwk']:.3f} → {g['qwk']:.3f} and Spearman "
+              f"{prev['spearman']:.3f} → {g['spearman']:.3f} — because a row the forest "
+              f"splits between levels 2 and 3 should be a 2.5, not a coin flip between "
+              f"two labels the metric treats as equally far apart. Verdict: "
+              f"{m['verdict']}.", ""]
 
     cv = RESULTS.get("convergence", {})
     if not cv.get("skipped"):
@@ -395,11 +451,20 @@ def write_summary():
               f"{fu['high_grid']} data and averaged over repeated nested draws.", "",
               f"With only **{n_min}** trusted points the fused model reaches R² = "
               f"**{at_min['fused']:.3f}**, where fitting those same {n_min} points alone "
-              f"gives R² = {at_min['high_only']:.3f} — an unusable model. That gap is the "
-              f"argument for fusion. Best fused R² = {bf.r2:.3f} at {int(bf.n_high)} points "
-              f"(ρ = {bf.rho:.3f}); by then the single-fidelity model has caught up "
-              f"({mf[(mf.n_high == bf.n_high) & (mf.model == 'high_only')].r2.iloc[0]:.3f}), "
-              "which is itself the answer to 'how many rows is enough'.", "",
+              f"gives R² = {at_min['high_only']:.3f} — an unusable model. Best fused R² = "
+              f"{bf.r2:.3f} at {int(bf.n_high)} points (ρ = {bf.rho:.3f}); by then the "
+              f"single-fidelity model has climbed to "
+              f"{mf[(mf.n_high == bf.n_high) & (mf.model == 'high_only')].r2.iloc[0]:.3f}.", "",
+              f"Read that against the floor: the cheap source alone scores "
+              f"**{at_min['low_only']:.3f}**. How much of ρ − 1 and of the discrepancy term "
+              f"to believe is measured by leave-one-out on the trusted points, and here "
+              f"the discrepancy trust averages "
+              f"**{mf[mf.model == 'fused'].get('delta_trust', pd.Series([float('nan')])).mean():.2f}**"
+              f" — on this mesh pair the fine solve adds nothing the coarse one lacks, so "
+              f"fusion holds the floor rather than beating it, where it used to fall 0.55 "
+              f"below it at four points. That is the model reporting honestly, not fusion "
+              f"working; the same machinery is what lets the correction switch on when a "
+              f"trusted source genuinely disagrees with the cheap one.", "",
               "Swap curated literature rows in as the high-fidelity source and this stage "
               "runs unchanged - that is the argument for the curation effort, quantified.",
               ""]

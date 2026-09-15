@@ -1,0 +1,78 @@
+{
+  "_note": "Headline accuracy as it stood BEFORE the accuracy work, taken from the results/metrics.json of commit 00112af. `printability.expected_readout` holds the scores of whatever was in PRODUCTION at the time - then, the classifier's argmax - so the delta the ledger prints compares production-then with production-now rather than two readouts that never both shipped.",
+  "ladder": {
+    "gibson_ashby_global": {
+      "r2": 0.7827725105613178,
+      "rmse": 0.6077966397224353,
+      "spearman": 0.9577480268334534,
+      "median_fold_error": 1.2188313892058695,
+      "n": 1806
+    },
+    "gibson_ashby_per_arch": {
+      "r2": 0.7827725105613178,
+      "rmse": 0.6077966397224353,
+      "spearman": 0.9577480268334534,
+      "median_fold_error": 1.2188313892058695,
+      "n": 1806
+    },
+    "plain_ml": {
+      "r2": 0.6538115755378362,
+      "rmse": 0.7672858237799645,
+      "spearman": 0.9354719951866541,
+      "median_fold_error": 1.2273903111811888,
+      "n": 1806
+    },
+    "physics_informed": {
+      "r2": 0.6466505986990692,
+      "rmse": 0.7751809351746695,
+      "spearman": 0.9373667189026554,
+      "median_fold_error": 1.2121480091827093,
+      "n": 1806
+    }
+  },
+  "ceiling": null,
+  "printability": {
+    "majority_baseline": {
+      "accuracy": 0.5550811272416738,
+      "qwk": 0.0,
+      "mae_levels": 0.7258753202391118,
+      "spearman": 0.0
+    },
+    "argmax_readout": {
+      "accuracy": 0.5871050384286934,
+      "qwk": 0.14369093909124409,
+      "mae_levels": 0.6453885567890691,
+      "spearman": 0.2782639744672471
+    },
+    "expected_readout": {
+      "accuracy": 0.5871050384286934,
+      "qwk": 0.14369093909124409,
+      "mae_levels": 0.6453885567890691,
+      "spearman": 0.2782639744672471
+    }
+  },
+  "fusion": {
+    "low_only": 0.8184,
+    "fused": {
+      "4": 0.2692,
+      "8": 0.6154,
+      "12": 0.6907,
+      "16": 0.6915,
+      "24": 0.7546,
+      "32": 0.7615,
+      "48": 0.7649,
+      "64": 0.7682
+    },
+    "high_only": {
+      "4": -0.9024,
+      "8": 0.1771,
+      "12": 0.24,
+      "16": 0.506,
+      "24": 0.5641,
+      "32": 0.6542,
+      "48": 0.7193,
+      "64": 0.7645
+    },
+    "rho_mean": 1.0775
+  }
+}

@@ -187,8 +187,10 @@ def fig_model_ladder(ladder_df, leakage=None):
         # that merely matches "always guess the majority class" has learned nothing.
         if leakage.get("baseline") is not None:
             ax.axhline(leakage["baseline"], ls="--", lw=1.3, color=MUTED)
-            ax.text(-0.42, leakage["baseline"] + 0.018, "majority-class baseline",
-                    fontsize=8.5, color=MUTED, va="bottom", ha="left")
+            # Centred in the gap between the two bars: pinned to the left edge it sat on
+            # top of the y-axis tick label it was meant to be read against.
+            ax.text(0.5, leakage["baseline"] + 0.018, "majority-class\nbaseline",
+                    fontsize=8.5, color=MUTED, va="bottom", ha="center", linespacing=1.1)
         ax.text(0.5, max(vals) * 1.14, f"random split inflates by +{vals[0]-vals[1]:.3f}",
                 ha="center", va="center", fontsize=9.5, color=INK2, fontweight="bold")
         ax.set_ylabel(leakage["metric"])
@@ -248,8 +250,16 @@ def fig_multifidelity(mf):
         g = mf[mf.model == m].sort_values("n_high")
         if g.empty:
             continue
-        ax.plot(g.n_high, g.r2, "-o", lw=2, ms=7, color=SERIES[i],
-                markeredgecolor=SURFACE, markeredgewidth=1.2, label=label[m])
+        if m == "low_only":
+            # The floor is drawn as a dashed line ON TOP. When fusion correctly declines
+            # to correct the cheap source the two curves coincide exactly, and a solid
+            # floor drawn first disappears under the fused line - hiding the very
+            # comparison the figure exists to make.
+            ax.plot(g.n_high, g.r2, "--", lw=1.8, color=SERIES[i], zorder=5,
+                    label=label[m])
+        else:
+            ax.plot(g.n_high, g.r2, "-o", lw=2, ms=7, color=SERIES[i], zorder=3,
+                    markeredgecolor=SURFACE, markeredgewidth=1.2, label=label[m])
         # Spread across repeated draws of the high-fidelity subset. Without it the reader
         # cannot tell a real budget effect from the luck of one draw.
         if "r2_std" in g and g.r2_std.notna().any() and g.r2_std.abs().sum() > 0:
