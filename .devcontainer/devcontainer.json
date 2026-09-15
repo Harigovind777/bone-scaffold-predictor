@@ -10,12 +10,15 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.14-bookworm",
   "features": {
     // `gh codespace ssh` needs an SSH server to check on the app from a terminal
-    "ghcr.io/devcontainers/features/sshd:1": {}
+    "ghcr.io/devcontainers/features/sshd:1": {},
+    // start-app.sh uses gh to set the app's port back to public after a restart
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
   // Started on every boot, not just the first, so a codespace woken from sleep serves
-  // the app again without anyone opening a terminal. Log: /tmp/scaffold-app.log
-  "postStartCommand": "nohup python -u webapp/server.py 8000 > /tmp/scaffold-app.log 2>&1 &",
+  // the app at the same public link without anyone opening a terminal.
+  // Log: /tmp/scaffold-app.log
+  "postStartCommand": "sh .devcontainer/start-app.sh",
   "forwardPorts": [8000],
   "portsAttributes": {
     "8000": { "label": "Scaffold app", "onAutoForward": "silent" }

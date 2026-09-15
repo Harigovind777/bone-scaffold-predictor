@@ -41,19 +41,19 @@ end-to-end on whatever exists.
 ## The web interface
 
 **On GitHub instead of your own machine.** The repository carries a dev-container config,
-so a GitHub Codespace installs the pinned requirements and starts the app by itself:
+so a GitHub Codespace installs the pinned requirements, starts the app by itself and makes
+its link public:
 
 ```bash
 gh auth refresh -h github.com -s codespace          # once: let gh manage codespaces
 gh codespace create -R Harigovind777/bone-scaffold-predictor -b accuracy-framework \
     -m basicLinux32gb --idle-timeout 240m
-gh codespace ports visibility 8000:public -c <codespace-name>   # make the link shareable
-gh codespace ports -c <codespace-name>                          # prints the link
+gh codespace ports -c <codespace-name>              # prints the shareable link
 ```
 
 The link only works while the codespace is running: it stops after the idle timeout and
-is restarted from github.com/codespaces, which brings the app back up. Anyone holding a
-public link can use every tab, including **Run pipeline**.
+is restarted from github.com/codespaces, which brings the app back up at the same public
+link. Anyone holding it can use every tab, including **Run pipeline**.
 
 
 ```bash
