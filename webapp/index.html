@@ -8,26 +8,27 @@
 /* ==========================================================================
    Tokens — "specimen under section"
    Series colours are assigned by what the thing IS, not by rank: the scaffold
-   is synthetic polymer (violet), new bone is mineral (ochre), the construct is
+   is synthetic polymer (blue), new bone is mineral (ochre), the construct is
    the two together (teal). Both sets pass the six categorical-palette checks
    (lightness band, chroma floor, CVD separation, normal-vision floor, contrast)
    against their own surface — the dark set is stepped for dark, not flipped.
+   Light is the default whatever the OS setting; dark is opt-in via the toggle.
    ========================================================================== */
 :root{
-  --bg:#E8EBE9;        --bg-sunk:#DFE3E0;
-  --surface:#FAFBFA;   --surface-2:#F1F3F1;  --surface-3:#E4E9E5;
-  --line:#D2D7D3;      --line-strong:#B7BFB9;
-  --ink:#15181A;       --ink-2:#39413E;      --muted:#5C6663;  --faint:#8B9591;
+  --bg:#EEF1F4;        --bg-sunk:#E5E9EE;
+  --surface:#FBFCFD;   --surface-2:#F2F4F7;  --surface-3:#E6EAEF;
+  --line:#D5DBE2;      --line-strong:#B8C1CC;
+  --ink:#16202B;       --ink-2:#384452;      --muted:#5A6674;  --faint:#8C98A5;
 
-  --scaffold:#5B44CC;  --bone:#B5761A;       --construct:#00947C;
-  --accent:#5B44CC;    --accent-ink:#FFFFFF; --accent-wash:#ECE9FA;
+  --scaffold:#1F5FAE;  --bone:#B5761A;       --construct:#00947C;
+  --accent:#1F5FAE;    --accent-ink:#FFFFFF; --accent-wash:#E7EEF7;
   --pass:#2A7D4F;      --pass-wash:#E3F1E9;
   --fail:#B03A2B;      --fail-wash:#FBEAE7;
   --warn:#8A6206;      --warn-wash:#F9F0D9;
-  --console-bg:#1A1922; --console-ink:#D8D6E4;
+  --console-bg:#1B2430; --console-ink:#D5DDE6;
 
-  --shadow-1:0 1px 2px rgba(20,24,22,.05), 0 2px 8px rgba(20,24,22,.04);
-  --shadow-2:0 12px 40px rgba(20,24,22,.16), 0 2px 8px rgba(20,24,22,.08);
+  --shadow-1:0 1px 2px rgba(22,32,43,.05), 0 2px 8px rgba(22,32,43,.04);
+  --shadow-2:0 12px 40px rgba(22,32,43,.16), 0 2px 8px rgba(22,32,43,.08);
 
   --display:"Avenir Next Condensed","Avenir Next","Arial Narrow",system-ui,sans-serif;
   --sans:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
@@ -39,35 +40,17 @@
   --slide:380ms cubic-bezier(.22,.61,.36,1);
   --quick:180ms cubic-bezier(.22,.61,.36,1);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme=light]){
-    --bg:#131219;        --bg-sunk:#0E0D14;
-    --surface:#1C1B26;   --surface-2:#17161F;  --surface-3:#232231;
-    --line:#2C2A3A;      --line-strong:#3D3B52;
-    --ink:#E9E8F0;       --ink-2:#C3C0D2;      --muted:#9793A8;  --faint:#726E85;
-
-    --scaffold:#8C74EF;  --bone:#C57F1E;       --construct:#00A58A;
-    --accent:#8C74EF;    --accent-ink:#14121F; --accent-wash:#241F3D;
-    --pass:#48BC80;      --pass-wash:#132A1E;
-    --fail:#F07A6A;      --fail-wash:#331A16;
-    --warn:#D9A441;      --warn-wash:#2E2413;
-    --console-bg:#0C0B12; --console-ink:#CFCCDE;
-
-    --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
-    --shadow-2:0 16px 48px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4);
-  }
-}
 :root[data-theme=dark]{
-  --bg:#131219;        --bg-sunk:#0E0D14;
-  --surface:#1C1B26;   --surface-2:#17161F;  --surface-3:#232231;
-  --line:#2C2A3A;      --line-strong:#3D3B52;
-  --ink:#E9E8F0;       --ink-2:#C3C0D2;      --muted:#9793A8;  --faint:#726E85;
-  --scaffold:#8C74EF;  --bone:#C57F1E;       --construct:#00A58A;
-  --accent:#8C74EF;    --accent-ink:#14121F; --accent-wash:#241F3D;
+  --bg:#12171D;        --bg-sunk:#0D1116;
+  --surface:#1A2028;   --surface-2:#161B22;  --surface-3:#212833;
+  --line:#2A323D;      --line-strong:#3A4452;
+  --ink:#E6EBF0;       --ink-2:#C0C8D1;      --muted:#929CA8;  --faint:#6F7984;
+  --scaffold:#4F8FE0;  --bone:#C57F1E;       --construct:#00A58A;
+  --accent:#4F8FE0;    --accent-ink:#0B1522; --accent-wash:#18263A;
   --pass:#48BC80;      --pass-wash:#132A1E;
   --fail:#F07A6A;      --fail-wash:#331A16;
   --warn:#D9A441;      --warn-wash:#2E2413;
-  --console-bg:#0C0B12; --console-ink:#CFCCDE;
+  --console-bg:#0D1116; --console-ink:#CCD5DF;
   --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
   --shadow-2:0 16px 48px rgba(0,0,0,.6), 0 2px 10px rgba(0,0,0,.4);
 }
@@ -285,7 +268,7 @@ input[type=range]::-moz-range-thumb{
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));
        gap:12px;margin-bottom:18px}
 .tile{
-  position:relative;text-align:left;background:var(--surface);
+  position:relative;text-align:left;background:var(--surface);color:var(--ink);
   border:1px solid var(--line);border-radius:var(--r);padding:13px 14px 12px;
   box-shadow:var(--shadow-1);cursor:pointer;
   transition:border-color var(--quick),transform var(--quick),box-shadow var(--quick);
@@ -495,10 +478,10 @@ pre.console{
   padding:16px 18px;border-radius:var(--r-lg);border:1px solid var(--line);
   max-height:560px;overflow:auto;margin:0;white-space:pre-wrap;word-break:break-word;
 }
-pre.console .h{color:#9C86F5;font-weight:700;display:block;margin:12px 0 4px}
+pre.console .h{color:#7DB0EA;font-weight:700;display:block;margin:12px 0 4px}
 pre.console .g{color:#5FCBA0}
 pre.console .w{color:#E2B159}
-pre.console .d{color:#6C6883}
+pre.console .d{color:#6E7C8C}
 
 /* ------------------------------------------------------------- utility --- */
 .empty{
@@ -733,8 +716,7 @@ let META = null, FAMILY = "TPMS", LAST = null;
 const savedTheme = localStorage.getItem("bsl-theme");
 if (savedTheme) document.documentElement.dataset.theme = savedTheme;
 $("#theme").onclick = () => {
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+  const cur = document.documentElement.dataset.theme || "light";
   const next = cur === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   localStorage.setItem("bsl-theme", next);
